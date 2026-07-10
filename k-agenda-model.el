@@ -107,11 +107,15 @@ unfinished work."
                :cancelled cancelled :percent percent)))
      buckets)))
 
+(defun k-agenda-model-projects-sorted (entries)
+  "Return every project's stats from ENTRIES, sorted by total task count descending."
+  (let ((stats (k-agenda-model-project-stats entries)))
+    (cl-sort (copy-sequence stats) #'> :key (lambda (s) (plist-get s :total)))))
+
 (defun k-agenda-model-top-projects (entries &optional n)
   "Return the top N (default 5) project stats from ENTRIES, by total task count."
-  (let ((stats (k-agenda-model-project-stats entries)))
-    (cl-subseq (cl-sort (copy-sequence stats) #'> :key (lambda (s) (plist-get s :total)))
-               0 (min (or n 5) (length stats)))))
+  (let ((sorted (k-agenda-model-projects-sorted entries)))
+    (cl-subseq sorted 0 (min (or n 5) (length sorted)))))
 
 (defun k-agenda-model-total-projects (entries)
   "Return the number of distinct project buckets in ENTRIES."

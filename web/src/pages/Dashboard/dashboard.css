@@ -46,29 +46,6 @@
   margin-top: 6px;
 }
 
-/* --- Shared card chrome --- */
-
-.k-card {
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
-}
-
-.k-card__title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 14px;
-}
-
-.k-card__subtitle {
-  font-weight: 400;
-  color: var(--text-muted);
-  font-size: 12px;
-  margin-left: 6px;
-}
-
 /* --- Dashboard grid --- */
 
 .k-dashboard__grid {
@@ -90,62 +67,6 @@
   .k-dashboard__grid {
     grid-template-columns: 1fr;
   }
-}
-
-/* --- Upcoming tasks table --- */
-
-.k-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.k-table th {
-  text-align: left;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  font-weight: 600;
-  padding: 0 10px 8px;
-  border-bottom: 1px solid var(--gridline);
-}
-
-.k-table td {
-  padding: 10px;
-  border-bottom: 1px solid var(--gridline);
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.k-table tr:last-child td {
-  border-bottom: none;
-}
-
-.k-table__title-cell {
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
-.k-table__muted {
-  color: var(--text-muted);
-}
-
-.k-upcoming__empty {
-  color: var(--text-muted);
-  font-size: 13px;
-  margin: 0;
-}
-
-.k-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 9px;
-  border-radius: 999px;
-  color: var(--badge-color, var(--text-muted));
-  background: color-mix(in srgb, var(--badge-color, var(--text-muted)) 16%, transparent);
 }
 
 /* --- Pie chart --- */
@@ -231,49 +152,3 @@
   border-radius: 50%;
 }
 
-/* --- Top projects progress --- */
-
-.k-top-projects__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.k-top-projects__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  column-gap: 10px;
-  row-gap: 6px;
-  align-items: center;
-}
-
-.k-top-projects__name {
-  font-size: 13px;
-  color: var(--text-primary);
-  font-weight: 500;
-  grid-column: 1 / -1;
-}
-
-.k-top-projects__bar-track {
-  height: 6px;
-  border-radius: 999px;
-  background: var(--gridline);
-  overflow: hidden;
-}
-
-.k-top-projects__bar-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--accent);
-}
-
-.k-top-projects__percent {
-  font-size: 12px;
-  color: var(--text-muted);
-  min-width: 34px;
-  text-align: right;
-}

@@ -1,0 +1,188 @@
+/* Shared building blocks used across Dashboard, Inbox, K Board, My Agenda,
+   Calendar and Projects -- kept in one place so they stay visually
+   consistent as more screens come online. */
+
+.k-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+}
+
+.k-card__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+.k-card__subtitle {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.k-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--badge-color, var(--text-muted));
+  background: color-mix(in srgb, var(--badge-color, var(--text-muted)) 16%, transparent);
+  white-space: nowrap;
+}
+
+.k-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.k-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0 10px 8px;
+  border-bottom: 1px solid var(--gridline);
+}
+
+.k-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--gridline);
+  font-size: 13px;
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+
+.k-table tr:last-child td {
+  border-bottom: none;
+}
+
+.k-table__title-cell {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.k-table__muted {
+  color: var(--text-muted);
+}
+
+.k-empty-note {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.k-page-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.k-page-toolbar__input {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 7px 12px;
+  font-size: 13px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  min-width: 200px;
+}
+
+.k-page-toolbar__select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 7px 10px;
+  font-size: 13px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+
+.k-page-toolbar__tabs {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.k-page-toolbar__tab {
+  border: none;
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.k-page-toolbar__tab + .k-page-toolbar__tab {
+  border-left: 1px solid var(--border);
+}
+
+.k-page-toolbar__tab--active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* --- Progress rows (project percent-done bars) --- */
+
+.k-progress-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.k-progress-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 6px;
+  align-items: center;
+}
+
+.k-progress-row__name {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+  grid-column: 1 / -1;
+}
+
+.k-progress-row__meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  grid-column: 1 / -1;
+  margin-top: -4px;
+}
+
+.k-progress-row__bar-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--gridline);
+  overflow: hidden;
+}
+
+.k-progress-row__bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.k-progress-row__percent {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 34px;
+  text-align: right;
+}

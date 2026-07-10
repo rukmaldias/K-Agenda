@@ -12,9 +12,6 @@
 (require 'k-agenda-model)
 (require 'cl-lib)
 
-(defconst k-agenda-protocol--top-projects-limit 5
-  "How many projects to include in the `projects' array of the snapshot.")
-
 (defun k-agenda-protocol--vec (list)
   "Convert LIST to a vector, so `json-serialize' emits a JSON array.
 An empty LIST becomes `[]', never `{}' or `null'."
@@ -89,7 +86,10 @@ that state."
                                  specs)))))
 
 (defun k-agenda-protocol--projects-payload (entries)
-  "Build the `projects' array from the top N project stats in ENTRIES."
+  "Build the `projects' array from every project's stats in ENTRIES.
+Sent in full (not capped) so both the Dashboard's top-N widget and the
+dedicated Projects screen can be built from the same payload -- the
+Dashboard just slices client-side."
   (k-agenda-protocol--vec
    (mapcar (lambda (p)
              (list (cons 'name (plist-get p :name))
@@ -98,7 +98,7 @@ that state."
                    (cons 'done (plist-get p :done))
                    (cons 'cancelled (plist-get p :cancelled))
                    (cons 'percent (plist-get p :percent))))
-           (k-agenda-model-top-projects entries k-agenda-protocol--top-projects-limit))))
+           (k-agenda-model-projects-sorted entries))))
 
 (defun k-agenda-protocol--task-payload (entry)
   "Build one `tasks[]' element from ENTRY (a k-agenda-model plist)."

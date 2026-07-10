@@ -1,0 +1,9 @@
+.k-projects {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.k-projects__list {
+  max-width: 640px;
+}

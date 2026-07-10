@@ -10,6 +10,30 @@ function startOfDay(date: Date): Date {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export function isSameDay(a: Date, b: Date): boolean {
+  return startOfDay(a).getTime() === startOfDay(b).getTime();
+}
+
+export function addDays(date: Date, n: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+/** A task "occurs" on DAY if its scheduled or deadline date falls on it. */
+export function taskOccursOn(
+  task: { scheduled: string | null; deadline: string | null },
+  day: Date
+): boolean {
+  return [task.scheduled, task.deadline].some((iso) => iso && isSameDay(new Date(iso), day));
+}
+
+export function formatTimeIfPresent(iso: string): string | null {
+  const date = new Date(iso);
+  const hasTime = iso.includes("T") && (date.getHours() !== 0 || date.getMinutes() !== 0);
+  return hasTime ? date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : null;
+}
+
 export function humanizeDueDate(iso: string | null, now: Date = new Date()): string | null {
   if (!iso) return null;
   const date = new Date(iso);
