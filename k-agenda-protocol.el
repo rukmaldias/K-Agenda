@@ -57,6 +57,24 @@ guessing."
       "Completed"
     (concat (upcase (substring keyword 0 1)) (downcase (substring keyword 1)))))
 
+(defconst k-agenda-protocol--fallback-type-by-state
+  '(("TODO" . "Todo")
+    ("NEXT" . "Task")
+    ("WAITING" . "Waiting")
+    ("INACTIVE" . "Inactive")
+    ("MEETING" . "Meeting")
+    ("DONE" . "Completed")
+    ("CANCELLED" . "Cancelled"))
+  "Best-guess Type label from `todoState', used for headings captured
+before `:CAPTURE_TYPE:' properties existed. NEXT maps to \"Task\" (not
+\"Next\") to match the org-capture-templates template of the same name.")
+
+(defun k-agenda-protocol--type-for (entry)
+  "Resolve ENTRY's display Type: its `:CAPTURE_TYPE:' property if present,
+else a best-guess from `:todo-state', else nil."
+  (or (plist-get entry :capture-type)
+      (cdr (assoc (plist-get entry :todo-state) k-agenda-protocol--fallback-type-by-state))))
+
 (defun k-agenda-protocol--todo-keywords-payload ()
   "Build the `todoKeywords' array: one entry per keyword, in sequence order."
   (let ((specs (k-agenda-protocol--todo-keyword-specs))
@@ -104,7 +122,8 @@ Dashboard just slices client-side."
   "Build one `tasks[]' element from ENTRY (a k-agenda-model plist)."
   (list (cons 'id (plist-get entry :id))
         (cons 'title (plist-get entry :title))
-        (cons 'todoState (plist-get entry :todo-state))
+        (cons 'todoState (or (plist-get entry :todo-state) :null))
+        (cons 'type (or (k-agenda-protocol--type-for entry) :null))
         (cons 'priority (or (plist-get entry :priority) :null))
         (cons 'tags (k-agenda-protocol--vec (plist-get entry :tags)))
         (cons 'project (or (plist-get entry :project) :null))
@@ -116,12 +135,16 @@ Dashboard just slices client-side."
         (cons 'closed (or (plist-get entry :closed) :null))))
 
 (defun k-agenda-protocol--tasks-payload (entries)
-  "Build the `tasks' array: only entries that have a TODO state.
-Project-anchor headings (no TODO keyword) are excluded -- they exist only
-to define project buckets, not as tasks in their own right."
+  "Build the `tasks' array: entries with a TODO state OR a `:CAPTURE_TYPE:'
+property. Plain project-anchor/prose headings (neither) are excluded --
+they exist only to define project buckets. A `:CAPTURE_TYPE:' entry with
+no TODO state (e.g. a Diary or Idea capture) is included with a null
+`todoState' so it's still visible as a typed, state-less item."
   (k-agenda-protocol--vec
    (mapcar #'k-agenda-protocol--task-payload
-           (cl-remove-if-not (lambda (e) (plist-get e :todo-state)) entries))))
+           (cl-remove-if-not
+            (lambda (e) (or (plist-get e :todo-state) (plist-get e :capture-type)))
+            entries))))
 
 (defun k-agenda-protocol-build-snapshot ()
   "Collect the current Org state and build the full snapshot data object."

@@ -2,6 +2,7 @@ import type { SnapshotData, Task } from "../../types/snapshot";
 import { earliestDueDate, humanizeDueDate } from "../../lib/date";
 import { isDoneState } from "../../lib/todoKeywords";
 import { StateBadge } from "../../components/StateBadge";
+import { TypeBadge } from "../../components/TypeBadge";
 
 interface UpcomingTasksTableProps {
   snapshot: SnapshotData;
@@ -32,6 +33,7 @@ export function UpcomingTasksTable({ snapshot }: UpcomingTasksTableProps) {
           <thead>
             <tr>
               <th>State</th>
+              <th>Type</th>
               <th>Title</th>
               <th>Project</th>
               <th>Due Date</th>
@@ -42,6 +44,9 @@ export function UpcomingTasksTable({ snapshot }: UpcomingTasksTableProps) {
               <tr key={task.id}>
                 <td>
                   <StateBadge snapshot={snapshot} todoState={task.todoState} />
+                </td>
+                <td>
+                  <TypeBadge type={task.type} />
                 </td>
                 <td className="k-table__title-cell">{task.title}</td>
                 <td className="k-table__muted">{task.project ?? "—"}</td>

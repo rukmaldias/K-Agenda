@@ -26,7 +26,10 @@ export interface ProjectProgress {
 export interface Task {
   id: string;
   title: string;
-  todoState: string;
+  /** null for a :CAPTURE_TYPE: capture with no TODO keyword (Diary/Idea). */
+  todoState: string | null;
+  /** :CAPTURE_TYPE: property if present, else a best-guess from todoState, else null. */
+  type: string | null;
   priority: string | null;
   tags: string[];
   project: string | null;

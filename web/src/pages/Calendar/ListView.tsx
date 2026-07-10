@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { SnapshotData } from "../../types/snapshot";
 import { earliestDueDate } from "../../lib/date";
 import { StateBadge } from "../../components/StateBadge";
+import { TypeBadge } from "../../components/TypeBadge";
 
 interface ListViewProps {
   snapshot: SnapshotData;
@@ -45,6 +46,9 @@ export function ListView({ snapshot }: ListViewProps) {
                 <tr key={task.id}>
                   <td>
                     <StateBadge snapshot={snapshot} todoState={task.todoState} />
+                  </td>
+                  <td>
+                    <TypeBadge type={task.type} />
                   </td>
                   <td className="k-table__title-cell">{task.title}</td>
                   <td className="k-table__muted">{task.project ?? "—"}</td>

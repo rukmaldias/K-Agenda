@@ -1,14 +1,17 @@
 import type { SnapshotData } from "../types/snapshot";
 
-export function faceHexFor(snapshot: SnapshotData, todoState: string): string {
+export function faceHexFor(snapshot: SnapshotData, todoState: string | null): string {
+  if (!todoState) return "#898781";
   return snapshot.todoKeywords.find((k) => k.name === todoState)?.faceHex ?? "#898781";
 }
 
-export function labelFor(snapshot: SnapshotData, todoState: string): string {
+export function labelFor(snapshot: SnapshotData, todoState: string | null): string {
+  if (!todoState) return "—";
   return snapshot.todoKeywords.find((k) => k.name === todoState)?.label ?? todoState;
 }
 
-export function isDoneState(snapshot: SnapshotData, todoState: string): boolean {
+export function isDoneState(snapshot: SnapshotData, todoState: string | null): boolean {
+  if (!todoState) return false;
   return snapshot.todoKeywords.find((k) => k.name === todoState)?.done ?? false;
 }
 

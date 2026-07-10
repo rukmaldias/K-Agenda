@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useSnapshot } from "../../lib/ws";
 import { earliestDueDate, humanizeDueDate } from "../../lib/date";
 import { StateBadge } from "../../components/StateBadge";
+import { TypeBadge } from "../../components/TypeBadge";
 import type { Task } from "../../types/snapshot";
 
 const ALL = "__all__";
@@ -19,17 +20,24 @@ export function Inbox() {
   const snapshot = useSnapshot();
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState(ALL);
+  const [typeFilter, setTypeFilter] = useState(ALL);
   const [projectFilter, setProjectFilter] = useState(ALL);
+
+  const types = useMemo(() => {
+    if (!snapshot) return [];
+    return [...new Set(snapshot.tasks.map((t) => t.type).filter((t): t is string => Boolean(t)))].sort();
+  }, [snapshot]);
 
   const filtered = useMemo(() => {
     if (!snapshot) return [];
     const q = query.trim().toLowerCase();
     return snapshot.tasks
       .filter((t) => (stateFilter === ALL ? true : t.todoState === stateFilter))
+      .filter((t) => (typeFilter === ALL ? true : t.type === typeFilter))
       .filter((t) => (projectFilter === ALL ? true : t.project === projectFilter))
       .filter((t) => (q === "" ? true : t.title.toLowerCase().includes(q)))
       .sort(sortByDueDate);
-  }, [snapshot, query, stateFilter, projectFilter]);
+  }, [snapshot, query, stateFilter, typeFilter, projectFilter]);
 
   if (!snapshot) {
     return <div className="k-dashboard-loading">Waiting for the first snapshot…</div>;
@@ -59,6 +67,18 @@ export function Inbox() {
         </select>
         <select
           className="k-page-toolbar__select"
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+        >
+          <option value={ALL}>All types</option>
+          {types.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <select
+          className="k-page-toolbar__select"
           value={projectFilter}
           onChange={(e) => setProjectFilter(e.target.value)}
         >
@@ -83,6 +103,7 @@ export function Inbox() {
             <thead>
               <tr>
                 <th>State</th>
+                <th>Type</th>
                 <th>Title</th>
                 <th>Project</th>
                 <th>Due Date</th>
@@ -93,6 +114,9 @@ export function Inbox() {
                 <tr key={task.id}>
                   <td>
                     <StateBadge snapshot={snapshot} todoState={task.todoState} />
+                  </td>
+                  <td>
+                    <TypeBadge type={task.type} />
                   </td>
                   <td className="k-table__title-cell">{task.title}</td>
                   <td className="k-table__muted">{task.project ?? "—"}</td>

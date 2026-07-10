@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { SnapshotData, Task } from "../types/snapshot";
 import { formatTimeIfPresent, isSameDay, taskOccursOn } from "../lib/date";
 import { StateBadge } from "./StateBadge";
+import { TypeBadge } from "./TypeBadge";
 
 interface DayTaskTableProps {
   snapshot: SnapshotData;
@@ -44,6 +45,7 @@ export function DayTaskTable({ snapshot, day }: DayTaskTableProps) {
         <tr>
           <th>Time</th>
           <th>State</th>
+          <th>Type</th>
           <th>Title</th>
           <th>Project</th>
         </tr>
@@ -54,6 +56,9 @@ export function DayTaskTable({ snapshot, day }: DayTaskTableProps) {
             <td className="k-table__muted">{dayTime(task, day) ?? "—"}</td>
             <td>
               <StateBadge snapshot={snapshot} todoState={task.todoState} />
+            </td>
+            <td>
+              <TypeBadge type={task.type} />
             </td>
             <td className="k-table__title-cell">{task.title}</td>
             <td className="k-table__muted">{task.project ?? "—"}</td>

@@ -27,12 +27,12 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  padding: 3px 9px;
+  padding: 5px 14px;
   border-radius: 999px;
-  color: var(--badge-color, var(--text-muted));
-  background: color-mix(in srgb, var(--badge-color, var(--text-muted)) 16%, transparent);
+  color: var(--badge-text, #ffffff);
+  background: var(--badge-color, var(--text-muted));
   white-space: nowrap;
 }
 
@@ -185,4 +185,99 @@
   color: var(--text-muted);
   min-width: 34px;
   text-align: right;
+}
+
+/* --- Type badges (Todo/Meeting/Diary/Idea/Task from :CAPTURE_TYPE:) ---
+   Unlike state badges, these colors are our own invented categorical set
+   (from the dataviz skill's validated default palette), not passed
+   through from the user's Emacs theme -- each swatch is hand-picked
+   with its own readable text color per light/dark mode rather than
+   computed, since dark mode isn't just a lighter/darker step of the
+   same fill (e.g. Task's fill flips from dark violet to pale lavender). */
+
+.k-type-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.k-type-badge--todo {
+  background: #2a78d6;
+  color: #ffffff;
+}
+
+.k-type-badge--meeting {
+  background: #1baf7a;
+  color: #ffffff;
+}
+
+.k-type-badge--diary {
+  background: #eda100;
+  color: #14141a;
+}
+
+.k-type-badge--idea {
+  background: #008300;
+  color: #ffffff;
+}
+
+.k-type-badge--task {
+  background: #4a3aa7;
+  color: #ffffff;
+}
+
+.k-type-badge--other {
+  background: var(--text-muted);
+  color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .k-type-badge--todo {
+    background: #3987e5;
+  }
+  .k-type-badge--meeting {
+    background: #199e70;
+  }
+  .k-type-badge--diary {
+    background: #c98500;
+  }
+  .k-type-badge--task {
+    background: #9085e9;
+    color: #14141a;
+  }
+}
+
+:root[data-theme="dark"] .k-type-badge--todo {
+  background: #3987e5;
+}
+:root[data-theme="dark"] .k-type-badge--meeting {
+  background: #199e70;
+}
+:root[data-theme="dark"] .k-type-badge--diary {
+  background: #c98500;
+}
+:root[data-theme="dark"] .k-type-badge--task {
+  background: #9085e9;
+  color: #14141a;
+}
+
+:root[data-theme="light"] .k-type-badge--todo {
+  background: #2a78d6;
+  color: #ffffff;
+}
+:root[data-theme="light"] .k-type-badge--meeting {
+  background: #1baf7a;
+  color: #ffffff;
+}
+:root[data-theme="light"] .k-type-badge--diary {
+  background: #eda100;
+  color: #14141a;
+}
+:root[data-theme="light"] .k-type-badge--task {
+  background: #4a3aa7;
+  color: #ffffff;
 }
