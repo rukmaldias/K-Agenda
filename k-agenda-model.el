@@ -1,0 +1,132 @@
+;;; k-agenda-model.el --- Org data model for k-agenda -*- lexical-binding: t; -*-
+
+;; This file has no network dependency by design: it must be loadable and
+;; testable headless (see k-agenda-model-test.el), independent of
+;; k-agenda-server.el / k-agenda-ws.el.
+
+;;; Code:
+
+(require 'org)
+(require 'cl-lib)
+
+(defun k-agenda-model-agenda-files ()
+  "Return `org-agenda-files' as absolute, expanded paths."
+  (mapcar #'expand-file-name (org-agenda-files t)))
+
+(defun k-agenda-model--iso8601 (time)
+  "Format TIME (an Emacs time value or nil) as an ISO 8601 string, or nil."
+  (when time
+    (format-time-string "%Y-%m-%dT%H:%M:%S%:z" time)))
+
+(defun k-agenda-model--project-for-entry ()
+  "Return the project name for the entry at point.
+
+The project is the title of the level-1 ancestor in the current file, or
+the entry's own title if it is already level 1. Some files (e.g. a bare
+capture inbox) may contain only sub-level headings with no level-1
+ancestor at all -- in that case fall back to the capitalized file
+basename, so every entry always has a project bucket to belong to."
+  (let ((olp (org-get-outline-path)))
+    (if olp
+        (car olp)
+      (if (= (org-outline-level) 1)
+          (org-get-heading t t t t)
+        (k-agenda-model--file-fallback-project)))))
+
+(defun k-agenda-model--file-fallback-project ()
+  "Capitalized basename (sans extension) of the current buffer's file."
+  (let ((base (file-name-base (buffer-file-name))))
+    (concat (upcase (substring base 0 1)) (substring base 1))))
+
+(defun k-agenda-model--entry-plist ()
+  "Build the data plist for the Org entry at point.
+
+Must be called with point on a heading, in a buffer visiting one of the
+files returned by `k-agenda-model--agenda-files'."
+  (list :id (or (org-entry-get (point) "ID")
+                (secure-hash 'sha1 (format "%s::%d" (buffer-file-name) (point))))
+        :title (substring-no-properties (org-get-heading t t t t))
+        :todo-state (org-get-todo-state)
+        :priority (org-entry-get (point) "PRIORITY")
+        :tags (org-get-tags nil t)
+        :scheduled (k-agenda-model--iso8601 (org-get-scheduled-time (point)))
+        :deadline (k-agenda-model--iso8601 (org-get-deadline-time (point)))
+        :closed (let ((closed (org-entry-get (point) "CLOSED")))
+                  (when closed
+                    (k-agenda-model--iso8601
+                     (org-time-string-to-time closed))))
+        :project (k-agenda-model--project-for-entry)
+        :file (file-name-nondirectory (buffer-file-name))
+        :level (org-outline-level)
+        :olp (org-get-outline-path)))
+
+(defun k-agenda-model-collect-entries ()
+  "Walk every heading in `org-agenda-files' and return a list of entry plists.
+
+Every heading is visited, including ones with no TODO keyword (project
+anchors, prose headings) -- callers that only care about tasks should
+filter on `:todo-state' being non-nil."
+  (let ((files (k-agenda-model-agenda-files)))
+    (org-map-entries #'k-agenda-model--entry-plist nil files)))
+
+(defun k-agenda-model--project-buckets (entries)
+  "Group ENTRIES by `:project', returning an alist of (name . entries)."
+  (let ((table (make-hash-table :test #'equal))
+        (order nil))
+    (dolist (entry entries)
+      (let ((project (plist-get entry :project)))
+        (unless (gethash project table)
+          (push project order))
+        (push entry (gethash project table))))
+    (mapcar (lambda (name) (cons name (nreverse (gethash name table))))
+            (nreverse order))))
+
+(defun k-agenda-model-project-stats (entries)
+  "Compute per-project task stats from ENTRIES.
+
+Returns a list of plists: (:name :file :total :done :cancelled :percent).
+Only entries with a non-nil `:todo-state' count toward totals -- a
+project-anchor heading itself (no TODO keyword) does not count as a task
+of its own project. CANCELLED tasks are excluded from both the numerator
+and the denominator of `:percent': a cancelled task is removed scope, not
+unfinished work."
+  (let ((buckets (k-agenda-model--project-buckets entries)))
+    (mapcar
+     (lambda (bucket)
+       (let* ((name (car bucket))
+              (tasks (cl-remove-if-not (lambda (e) (plist-get e :todo-state))
+                                       (cdr bucket)))
+              (done (cl-count-if (lambda (e) (equal (plist-get e :todo-state) "DONE")) tasks))
+              (cancelled (cl-count-if (lambda (e) (equal (plist-get e :todo-state) "CANCELLED")) tasks))
+              (total (length tasks))
+              (denom (- total cancelled))
+              (percent (if (> denom 0) (round (* 100.0 (/ (float done) denom))) 0))
+              (file (or (plist-get (car (cdr bucket)) :file)
+                        (plist-get (car (last (cdr bucket))) :file))))
+         (list :name name :file file :total total :done done
+               :cancelled cancelled :percent percent)))
+     buckets)))
+
+(defun k-agenda-model-top-projects (entries &optional n)
+  "Return the top N (default 5) project stats from ENTRIES, by total task count."
+  (let ((stats (k-agenda-model-project-stats entries)))
+    (cl-subseq (cl-sort (copy-sequence stats) #'> :key (lambda (s) (plist-get s :total)))
+               0 (min (or n 5) (length stats)))))
+
+(defun k-agenda-model-total-projects (entries)
+  "Return the number of distinct project buckets in ENTRIES."
+  (length (k-agenda-model--project-buckets entries)))
+
+(defun k-agenda-model-state-counts (entries)
+  "Return an alist of (TODO-KEYWORD . count) across ENTRIES with a TODO state."
+  (let ((table (make-hash-table :test #'equal)))
+    (dolist (entry entries)
+      (let ((state (plist-get entry :todo-state)))
+        (when state
+          (puthash state (1+ (gethash state table 0)) table))))
+    (let (result)
+      (maphash (lambda (k v) (push (cons k v) result)) table)
+      result)))
+
+(provide 'k-agenda-model)
+;;; k-agenda-model.el ends here
