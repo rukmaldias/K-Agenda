@@ -94,17 +94,18 @@ are counted per distinct project name."
                             (lambda (a b) (string< (car a) (car b))))
                       '(("NEXT" . 1) ("TODO" . 2)))))))
 
-(ert-deftest k-agenda-test-capture-type-property-read-without-todo-state ()
-  "A Diary/Idea-style capture (no TODO keyword, a :CAPTURE_TYPE: property)
-is still parsed, with :capture-type populated and :todo-state nil."
+(ert-deftest k-agenda-test-tagged-heading-with-no-todo-state-is-parsed ()
+  "A Diary/Idea-style heading (no TODO keyword, just a tag) is still
+parsed, with its tags populated and :todo-state nil -- Type resolution
+itself is k-agenda-protocol.el's job, tested there."
   (k-agenda-test-with-fixture-files
-      ((diary "* Project X Board\n\n** Wrote a journal entry\n:PROPERTIES:\n:CAPTURE_TYPE: Diary\n:END:\n"))
+      ((diary "* Project X Board\n\n** Wrote a journal entry :Diary:\n"))
     (let* ((entries (k-agenda-model-collect-entries))
            (entry (cl-find "Wrote a journal entry" entries
                             :key (lambda (e) (plist-get e :title)) :test #'equal)))
       (should entry)
       (should (null (plist-get entry :todo-state)))
-      (should (equal (plist-get entry :capture-type) "Diary")))))
+      (should (member "Diary" (plist-get entry :tags))))))
 
 (provide 'k-agenda-model-test)
 ;;; k-agenda-model-test.el ends here

@@ -11,6 +11,23 @@ function hexToRgb(hex: string): [number, number, number] | null {
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 }
 
+function rgbToHex([r, g, b]: [number, number, number]): string {
+  const clamp = (c: number) => Math.max(0, Math.min(255, Math.round(c)));
+  return "#" + [r, g, b].map((c) => clamp(c).toString(16).padStart(2, "0")).join("");
+}
+
+/** Blends HEX toward neutral gray, so a vivid editor-theme color reads as
+ * a calmer badge fill rather than a loud, saturated block. Theme-independent
+ * (mixes toward mid-gray, not toward the surface color), so it looks the
+ * same relative intensity in light or dark mode. */
+export function mutedFill(hex: string, strength = 0.3): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  const gray = 128;
+  const mixed = rgb.map((c) => c * (1 - strength) + gray * strength) as [number, number, number];
+  return rgbToHex(mixed);
+}
+
 function relativeLuminance([r, g, b]: [number, number, number]): number {
   const [rs, gs, bs] = [r, g, b].map((c) => {
     const cs = c / 255;

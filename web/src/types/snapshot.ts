@@ -26,9 +26,9 @@ export interface ProjectProgress {
 export interface Task {
   id: string;
   title: string;
-  /** null for a :CAPTURE_TYPE: capture with no TODO keyword (Diary/Idea). */
+  /** null for a Type-tagged heading with no TODO keyword (Diary/Idea). */
   todoState: string | null;
-  /** :CAPTURE_TYPE: property if present, else a best-guess from todoState, else null. */
+  /** One of TODO/Meeting/Diary/Idea/Task, matched from the heading's tags; null if none match. */
   type: string | null;
   priority: string | null;
   tags: string[];
