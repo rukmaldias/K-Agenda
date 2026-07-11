@@ -2,7 +2,7 @@
 
 ;; Author: Rukmal Dias
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "27.1") (websocket "1.13") (simple-httpd "1.5.1"))
+;; Package-Requires: ((emacs "27.1") (websocket "1.13"))
 ;; Keywords: org, outlines, hypermedia
 
 ;;; Commentary:
