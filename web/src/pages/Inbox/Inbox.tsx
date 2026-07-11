@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useSnapshot } from "../../lib/ws";
 import { earliestDueDate, humanizeDueDate } from "../../lib/date";
+import { KNOWN_CAPTURE_TYPES } from "../../lib/captureTypes";
 import { StateBadge } from "../../components/StateBadge";
 import { TypeBadge } from "../../components/TypeBadge";
 import type { Task } from "../../types/snapshot";
@@ -22,11 +23,6 @@ export function Inbox() {
   const [stateFilter, setStateFilter] = useState(ALL);
   const [typeFilter, setTypeFilter] = useState(ALL);
   const [projectFilter, setProjectFilter] = useState(ALL);
-
-  const types = useMemo(() => {
-    if (!snapshot) return [];
-    return [...new Set(snapshot.tasks.map((t) => t.type).filter((t): t is string => Boolean(t)))].sort();
-  }, [snapshot]);
 
   const filtered = useMemo(() => {
     if (!snapshot) return [];
@@ -71,7 +67,7 @@ export function Inbox() {
           onChange={(e) => setTypeFilter(e.target.value)}
         >
           <option value={ALL}>All types</option>
-          {types.map((t) => (
+          {KNOWN_CAPTURE_TYPES.map((t) => (
             <option key={t} value={t}>
               {t}
             </option>

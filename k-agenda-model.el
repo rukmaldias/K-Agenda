@@ -13,25 +13,61 @@
   "Return `org-agenda-files' as absolute, expanded paths."
   (mapcar #'expand-file-name (org-agenda-files t)))
 
+(defun k-agenda-model--raw-agenda-files ()
+  "The literal `org-agenda-files' value, before Org expands any directory
+entries into their individual files. Needed to tell which files came
+from a directory entry -- `(org-agenda-files t)' flattens that away."
+  (if (functionp org-agenda-files) (funcall org-agenda-files) org-agenda-files))
+
+(defun k-agenda-model-project-files ()
+  "Absolute paths of every file inside a directory entry of
+`org-agenda-files' (non-recursive, matching `org-agenda-file-regexp' --
+the same rule Org itself uses to expand a directory entry).
+
+These, and only these, are \"project\" files: one project per file. A
+plain file entry in `org-agenda-files' (inbox.org, work.org, ...) never
+counts, even though its headings are still scanned for tasks -- see
+`k-agenda-model--project-for-entry'."
+  (let (result)
+    (dolist (entry (k-agenda-model--raw-agenda-files))
+      (let ((expanded (expand-file-name entry)))
+        (when (file-directory-p expanded)
+          (dolist (f (directory-files expanded t org-agenda-file-regexp))
+            (push f result)))))
+    (nreverse result)))
+
+(defun k-agenda-model--project-file-p (file)
+  "Non-nil if FILE is one of `k-agenda-model-project-files'."
+  (member (expand-file-name file) (k-agenda-model-project-files)))
+
 (defun k-agenda-model--iso8601 (time)
   "Format TIME (an Emacs time value or nil) as an ISO 8601 string, or nil."
   (when time
     (format-time-string "%Y-%m-%dT%H:%M:%S%:z" time)))
 
-(defun k-agenda-model--project-for-entry ()
-  "Return the project name for the entry at point.
+(defun k-agenda-model--buffer-title ()
+  "This buffer's `#+TITLE:' value, or nil if it has none."
+  (cadr (assoc "TITLE" (org-collect-keywords '("TITLE")))))
 
-The project is the title of the level-1 ancestor in the current file, or
-the entry's own title if it is already level 1. Some files (e.g. a bare
-capture inbox) may contain only sub-level headings with no level-1
-ancestor at all -- in that case fall back to the capitalized file
-basename, so every entry always has a project bucket to belong to."
-  (let ((olp (org-get-outline-path)))
-    (if olp
-        (car olp)
-      (if (= (org-outline-level) 1)
-          (org-get-heading t t t t)
-        (k-agenda-model--file-fallback-project)))))
+(defun k-agenda-model--project-for-entry ()
+  "Return the project name for the entry at point, or nil if the current
+file isn't a project file (see `k-agenda-model-project-files').
+
+Non-project files (inbox.org, work.org, learning.org, ...) never
+contribute a project -- their headings are just untethered tasks, not
+project anchors, however deeply nested. A project file's `#+TITLE:' wins
+if present (so a file can have a human-friendly project name distinct
+from its heading text); otherwise the level-1 ancestor heading (or the
+entry's own title, if it is already level 1); a project file with only
+sub-level headings and no title falls back to its capitalized basename."
+  (when (k-agenda-model--project-file-p (buffer-file-name))
+    (or (k-agenda-model--buffer-title)
+        (let ((olp (org-get-outline-path)))
+          (if olp
+              (car olp)
+            (if (= (org-outline-level) 1)
+                (org-get-heading t t t t)
+              (k-agenda-model--file-fallback-project)))))))
 
 (defun k-agenda-model--file-fallback-project ()
   "Capitalized basename (sans extension) of the current buffer's file."
@@ -58,7 +94,8 @@ files returned by `k-agenda-model--agenda-files'."
         :project (k-agenda-model--project-for-entry)
         :file (file-name-nondirectory (buffer-file-name))
         :level (org-outline-level)
-        :olp (org-get-outline-path)))
+        :olp (org-get-outline-path)
+        :capture-type (org-entry-get (point) "CAPTURE_TYPE")))
 
 (defun k-agenda-model-collect-entries ()
   "Walk every heading in `org-agenda-files' and return a list of entry plists.
@@ -70,14 +107,18 @@ filter on `:todo-state' being non-nil."
     (org-map-entries #'k-agenda-model--entry-plist nil files)))
 
 (defun k-agenda-model--project-buckets (entries)
-  "Group ENTRIES by `:project', returning an alist of (name . entries)."
+  "Group ENTRIES by `:project', returning an alist of (name . entries).
+Entries with a nil `:project' (anything outside a project file) are
+skipped entirely -- they don't belong to any project, rather than
+collecting into a bogus \"nil-named\" bucket."
   (let ((table (make-hash-table :test #'equal))
         (order nil))
     (dolist (entry entries)
       (let ((project (plist-get entry :project)))
-        (unless (gethash project table)
-          (push project order))
-        (push entry (gethash project table))))
+        (when project
+          (unless (gethash project table)
+            (push project order))
+          (push entry (gethash project table)))))
     (mapcar (lambda (name) (cons name (nreverse (gethash name table))))
             (nreverse order))))
 

@@ -1,19 +1,29 @@
 ;;; k-agenda-protocol.el --- JSON wire protocol for k-agenda -*- lexical-binding: t; -*-
 
 ;; Transforms k-agenda-model.el's plist entries into the JSON snapshot
-;; payload documented in the project plan. Uses Emacs's native
-;; `json-serialize' (Emacs 27+), which requires array-valued fields to be
-;; vectors, not lists -- a plain list is otherwise mistaken for an
-;; alist/plist and either errors or serializes as an object. See
-;; `k-agenda-protocol--vec'.
+;; payload documented in the project plan.
+;;
+;; Uses the pure-Lisp `json.el' (`json-encode'), not the native
+;; `json-serialize' -- this machine's Emacs build has no libjansson
+;; linked (`system-configuration-features' omits "JSON"), so
+;; `json-serialize' falls back to Emacs's newer built-in pure-Lisp JSON
+;; implementation, which was found to corrupt multibyte characters (e.g.
+;; an em dash in a real heading came out as invalid UTF-8 bytes,
+;; reproduced with both file-read and literal Lisp strings). `json-encode'
+;; round-trips the same strings correctly. Array-valued fields still need
+;; to be real vectors, not lists -- see `k-agenda-protocol--vec' -- and
+;; `nil' is `json.el''s null marker (`json-null''s default), so a plain
+;; `(plist-get entry :foo)' already serializes as `null' when absent; no
+;; extra wrapping needed.
 
 ;;; Code:
 
 (require 'k-agenda-model)
 (require 'cl-lib)
+(require 'json)
 
 (defun k-agenda-protocol--vec (list)
-  "Convert LIST to a vector, so `json-serialize' emits a JSON array.
+  "Convert LIST to a vector, so `json-encode' emits a JSON array.
 An empty LIST becomes `[]', never `{}' or `null'."
   (apply #'vector list))
 
@@ -57,20 +67,23 @@ guessing."
       "Completed"
     (concat (upcase (substring keyword 0 1)) (downcase (substring keyword 1)))))
 
-(defconst k-agenda-protocol--known-types '("TODO" "Meeting" "Diary" "Idea" "Task")
-  "The only Type values K-Agenda ever displays, matching the names of the
-user's org-capture-templates. A heading's tags are matched
-case-insensitively against this list -- never guessed from `:todo-state'
-or any other field. No matching tag means no Type (blank in the UI).")
+(defconst k-agenda-protocol--known-types '("Todo" "Meeting" "Diary" "Idea" "Task")
+  "The only Type values K-Agenda ever displays -- the exact set the user's
+org-capture-templates stamp into a heading's `:CAPTURE_TYPE:' property.
+Matched case-insensitively so a stray typo in casing still resolves, but
+never guessed from `:todo-state', tags, or any other field: no
+`:CAPTURE_TYPE:' property (or an unrecognized value) means no Type
+(blank in the UI).")
 
 (defun k-agenda-protocol--type-for (entry)
-  "Resolve ENTRY's Type from its tags, matched case-insensitively against
-`k-agenda-protocol--known-types'. Returns the canonically-cased name (so
-a literal :meeting: or :MEETING: tag both resolve to \"Meeting\"), or nil
-if no tag matches."
-  (let ((tags (mapcar #'downcase (plist-get entry :tags))))
-    (cl-find-if (lambda (known) (member (downcase known) tags))
-                k-agenda-protocol--known-types)))
+  "Resolve ENTRY's Type from its `:capture-type' property, matched
+case-insensitively against `k-agenda-protocol--known-types'. Returns the
+canonically-cased name, or nil if the property is absent or its value
+isn't one of the 5 known types."
+  (let ((value (plist-get entry :capture-type)))
+    (when value
+      (cl-find-if (lambda (known) (string-equal (downcase known) (downcase value)))
+                  k-agenda-protocol--known-types))))
 
 (defun k-agenda-protocol--todo-keywords-payload ()
   "Build the `todoKeywords' array: one entry per keyword, in sequence order."
@@ -81,9 +94,9 @@ if no tag matches."
       (let ((name (car spec)))
         (push (list (cons 'name name)
                     (cons 'label (k-agenda-protocol--label name))
-                    (cons 'faceHex (or (k-agenda-protocol--face-hex name) :null))
+                    (cons 'faceHex (k-agenda-protocol--face-hex name))
                     (cons 'sequenceIndex index)
-                    (cons 'done (if (cdr spec) t :false)))
+                    (cons 'done (if (cdr spec) t :json-false)))
               result))
       (setq index (1+ index)))
     (k-agenda-protocol--vec (nreverse result))))
@@ -119,24 +132,24 @@ Dashboard just slices client-side."
   "Build one `tasks[]' element from ENTRY (a k-agenda-model plist)."
   (list (cons 'id (plist-get entry :id))
         (cons 'title (plist-get entry :title))
-        (cons 'todoState (or (plist-get entry :todo-state) :null))
-        (cons 'type (or (k-agenda-protocol--type-for entry) :null))
-        (cons 'priority (or (plist-get entry :priority) :null))
+        (cons 'todoState (plist-get entry :todo-state))
+        (cons 'type (k-agenda-protocol--type-for entry))
+        (cons 'priority (plist-get entry :priority))
         (cons 'tags (k-agenda-protocol--vec (plist-get entry :tags)))
-        (cons 'project (or (plist-get entry :project) :null))
+        (cons 'project (plist-get entry :project))
         (cons 'file (plist-get entry :file))
         (cons 'level (plist-get entry :level))
         (cons 'olp (k-agenda-protocol--vec (plist-get entry :olp)))
-        (cons 'scheduled (or (plist-get entry :scheduled) :null))
-        (cons 'deadline (or (plist-get entry :deadline) :null))
-        (cons 'closed (or (plist-get entry :closed) :null))))
+        (cons 'scheduled (plist-get entry :scheduled))
+        (cons 'deadline (plist-get entry :deadline))
+        (cons 'closed (plist-get entry :closed))))
 
 (defun k-agenda-protocol--tasks-payload (entries)
-  "Build the `tasks' array: entries with a TODO state OR a recognized Type
-tag. Plain project-anchor/prose headings (neither) are excluded -- they
-exist only to define project buckets. A Type-tagged entry with no TODO
-state (e.g. a Diary or Idea heading) is included with a null `todoState'
-so it's still visible as a typed, state-less item."
+  "Build the `tasks' array: entries with a TODO state OR a recognized
+`:CAPTURE_TYPE:'. Plain project-anchor/prose headings (neither) are
+excluded -- they exist only to define project buckets. A typed entry
+with no TODO state (e.g. a Diary or Idea capture) is included with a
+null `todoState' so it's still visible as a typed, state-less item."
   (k-agenda-protocol--vec
    (mapcar #'k-agenda-protocol--task-payload
            (cl-remove-if-not
@@ -155,8 +168,10 @@ so it's still visible as a typed, state-less item."
 
 (defun k-agenda-protocol-encode-snapshot ()
   "Return the current snapshot as a JSON string, wrapped in the envelope."
-  (json-serialize (list (cons 'type "snapshot")
-                         (cons 'data (k-agenda-protocol-build-snapshot)))))
+  (let ((json-false :json-false)
+        (json-null nil))
+    (json-encode (list (cons 'type "snapshot")
+                        (cons 'data (k-agenda-protocol-build-snapshot))))))
 
 (provide 'k-agenda-protocol)
 ;;; k-agenda-protocol.el ends here
