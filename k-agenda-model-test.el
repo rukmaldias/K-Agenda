@@ -194,5 +194,52 @@ k-agenda-protocol.el's job (from :CAPTURE_TYPE:), tested there."
       (should (null (plist-get entry :todo-state)))
       (should (equal (plist-get entry :capture-type) "Diary")))))
 
+(ert-deftest k-agenda-test-body-for-id-strips-planning-properties-logbook ()
+  "The extracted body excludes the DEADLINE planning line, the property
+drawer, and a LOGBOOK drawer -- only the free text remains."
+  (k-agenda-test-with-fixture-files
+      ((project_x "* Project X\n\n** TODO Fix Jenkins docker socket GID issue\nDEADLINE: <2026-07-11 Sat>\n:PROPERTIES:\n:CAPTURE_TYPE: Task\n:END:\n:LOGBOOK:\nCLOCK: [2026-07-10 Fri 10:00]--[2026-07-10 Fri 10:30] =>  0:30\n:END:\nThis is the real body text.\n\nA second paragraph.\n"))
+    (let* ((entries (k-agenda-model-collect-entries))
+           (task (cl-find "Fix Jenkins docker socket GID issue" entries
+                           :key (lambda (e) (plist-get e :title)) :test #'equal))
+           (body (k-agenda-model-body-for-id (plist-get task :id))))
+      (should body)
+      (should (equal body "This is the real body text.\n\nA second paragraph."))
+      (should-not (string-match-p "DEADLINE" body))
+      (should-not (string-match-p "PROPERTIES" body))
+      (should-not (string-match-p "LOGBOOK" body)))))
+
+(ert-deftest k-agenda-test-body-for-id-strips-planning-line-out-of-order ()
+  "Regression test: the real project_x.org has the property drawer BEFORE
+the DEADLINE planning line (non-standard order) -- `org-end-of-meta-data'
+only recognizes a planning line immediately after the heading, before
+any drawer, so it left DEADLINE in the body until this was fixed."
+  (k-agenda-test-with-fixture-files
+      ((project_x "* Project X\n\n** TODO Fix Jenkins docker socket GID issue\n:PROPERTIES:\n:CAPTURE_TYPE: Task\n:END:\nDEADLINE: <2026-07-11 Sat>\n\nThis is the real body text.\n"))
+    (let* ((entries (k-agenda-model-collect-entries))
+           (task (cl-find "Fix Jenkins docker socket GID issue" entries
+                           :key (lambda (e) (plist-get e :title)) :test #'equal))
+           (body (k-agenda-model-body-for-id (plist-get task :id))))
+      (should (equal body "This is the real body text.")))))
+
+(ert-deftest k-agenda-test-body-for-id-stops-before-child-heading ()
+  "The body includes only this entry's own free text, not a child
+heading's content."
+  (k-agenda-test-with-fixture-files
+      ((project "* Project\n\n** TODO Parent task\nParent's own text.\n\n*** TODO Child task\nChild's own text.\n"))
+    (let* ((entries (k-agenda-model-collect-entries))
+           (parent (cl-find "Parent task" entries
+                             :key (lambda (e) (plist-get e :title)) :test #'equal))
+           (body (k-agenda-model-body-for-id (plist-get parent :id))))
+      (should (equal body "Parent's own text."))
+      (should-not (string-match-p "Child" body)))))
+
+(ert-deftest k-agenda-test-body-for-id-nil-when-not-found ()
+  "An id that doesn't match any current entry (stale snapshot, or a
+heading that's since been deleted) resolves to nil, not an error."
+  (k-agenda-test-with-fixture-files
+      ((project "* Project\n\n** TODO Some task\n"))
+    (should (null (k-agenda-model-body-for-id "not-a-real-id")))))
+
 (provide 'k-agenda-model-test)
 ;;; k-agenda-model-test.el ends here

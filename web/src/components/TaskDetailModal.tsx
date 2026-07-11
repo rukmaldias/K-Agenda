@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useTaskDetail } from "../state/taskDetail";
-import { useSnapshot } from "../lib/ws";
+import { useSnapshot, useTaskBody } from "../lib/ws";
 import { StateBadge } from "./StateBadge";
 import { TypeBadge } from "./TypeBadge";
 
@@ -21,6 +21,7 @@ function formatAbsolute(iso: string | null): string | null {
 export function TaskDetailModal() {
   const { selectedTask, closeTask } = useTaskDetail();
   const snapshot = useSnapshot();
+  const body = useTaskBody(selectedTask?.id ?? null);
 
   useEffect(() => {
     if (!selectedTask) return;
@@ -82,6 +83,15 @@ export function TaskDetailModal() {
               ))}
             </tbody>
           </table>
+        )}
+
+        <div className="k-modal__section-title">Description</div>
+        {body === undefined ? (
+          <p className="k-modal__body-loading">Loading…</p>
+        ) : body === null ? (
+          <p className="k-modal__body-loading">No description.</p>
+        ) : (
+          <pre className="k-modal__body">{body}</pre>
         )}
 
         <p className="k-modal__note">

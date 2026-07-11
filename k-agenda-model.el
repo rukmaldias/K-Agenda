@@ -82,13 +82,24 @@ sub-level headings and no title falls back to its capitalized basename."
   (let ((base (file-name-base (buffer-file-name))))
     (concat (upcase (substring base 0 1)) (substring base 1))))
 
+(defun k-agenda-model--entry-id ()
+  "Stable-ish id for the entry at point: its real `:ID:' property if the
+user has one, else a hash of file+point. The hash form is NOT stable
+across edits that shift character positions earlier in the buffer --
+acceptable for a React list key and for the short-lived
+list-then-click-for-detail flow (`k-agenda-model-body-for-id'
+re-resolves this fresh from the current buffer state on every request,
+so a stale id from an old snapshot just fails to match rather than
+resolving to the wrong heading)."
+  (or (org-entry-get (point) "ID")
+      (secure-hash 'sha1 (format "%s::%d" (buffer-file-name) (point)))))
+
 (defun k-agenda-model--entry-plist ()
   "Build the data plist for the Org entry at point.
 
 Must be called with point on a heading, in a buffer visiting one of the
 files returned by `k-agenda-model--agenda-files'."
-  (list :id (or (org-entry-get (point) "ID")
-                (secure-hash 'sha1 (format "%s::%d" (buffer-file-name) (point))))
+  (list :id (k-agenda-model--entry-id)
         :title (substring-no-properties (org-get-heading t t t t))
         :todo-state (org-get-todo-state)
         :priority (org-entry-get (point) "PRIORITY")
@@ -113,6 +124,40 @@ anchors, prose headings) -- callers that only care about tasks should
 filter on `:todo-state' being non-nil."
   (let ((files (k-agenda-model-agenda-files)))
     (org-map-entries #'k-agenda-model--entry-plist nil files)))
+
+(defun k-agenda-model--entry-body ()
+  "Free-text body of the entry at point: everything after the planning
+line/property drawer/logbook, stopping before the first child heading
+(or the next sibling heading, or end of buffer, if there are none)."
+  (save-excursion
+    (org-back-to-heading t)
+    (org-end-of-meta-data t)
+    (let* ((start (point))
+           (end (save-excursion (or (outline-next-heading) (point-max))))
+           (text (buffer-substring-no-properties start end)))
+      ;; `org-end-of-meta-data' expects the planning line (DEADLINE/
+      ;; SCHEDULED/CLOSED) immediately after the heading, before any
+      ;; drawer -- some real files here have the property drawer first
+      ;; and the planning line after it, which it doesn't skip. Strip
+      ;; any leftover leading planning line(s) regardless of order.
+      (setq text (replace-regexp-in-string
+                  "\\`\\(?:[ \t]*\\(?:DEADLINE\\|SCHEDULED\\|CLOSED\\):.*\n?\\)+" "" text))
+      (string-trim text))))
+
+(defun k-agenda-model-body-for-id (id)
+  "Return the free-text body of the entry whose id (see
+`k-agenda-model--entry-id') matches ID, re-resolved fresh against the
+current state of `org-agenda-files', or nil if no entry matches (a
+non-existent id, or a hash-based id gone stale after an intervening
+edit -- see `k-agenda-model--entry-id')."
+  (let ((files (k-agenda-model-agenda-files)))
+    (catch 'k-agenda-model-body-found
+      (org-map-entries
+       (lambda ()
+         (when (equal (k-agenda-model--entry-id) id)
+           (throw 'k-agenda-model-body-found (k-agenda-model--entry-body))))
+       nil files)
+      nil)))
 
 (defun k-agenda-model--project-buckets (entries)
   "Group ENTRIES by `:project', returning an alist of (name . entries).

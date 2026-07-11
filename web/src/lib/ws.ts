@@ -1,7 +1,9 @@
-import { useSyncExternalStore } from "react";
-import type { SnapshotData, SnapshotMessage } from "../types/snapshot";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import type { SnapshotData, SnapshotMessage, TaskBodyMessage } from "../types/snapshot";
 
 export type ConnectionStatus = "connecting" | "open" | "closed";
+
+type IncomingMessage = SnapshotMessage | TaskBodyMessage;
 
 interface StoreState {
   status: ConnectionStatus;
@@ -19,7 +21,9 @@ const INITIAL_RETRY_MS = 500;
 const MAX_RETRY_MS = 10_000;
 
 let state: StoreState = { status: "connecting", snapshot: null };
+let currentSocket: WebSocket | null = null;
 const listeners = new Set<() => void>();
+const messageListeners = new Set<(msg: IncomingMessage) => void>();
 
 function setState(next: Partial<StoreState>) {
   state = { ...state, ...next };
@@ -37,6 +41,7 @@ function getState() {
 
 function connect(retryMs = INITIAL_RETRY_MS) {
   const socket = new WebSocket(WS_URL);
+  currentSocket = socket;
 
   socket.addEventListener("open", () => {
     setState({ status: "open" });
@@ -44,10 +49,11 @@ function connect(retryMs = INITIAL_RETRY_MS) {
 
   socket.addEventListener("message", (event) => {
     try {
-      const message = JSON.parse(event.data) as SnapshotMessage;
+      const message = JSON.parse(event.data) as IncomingMessage;
       if (message.type === "snapshot") {
         setState({ snapshot: message.data });
       }
+      messageListeners.forEach((l) => l(message));
     } catch {
       // Ignore malformed frames rather than crashing the socket loop.
     }
@@ -55,6 +61,7 @@ function connect(retryMs = INITIAL_RETRY_MS) {
 
   const scheduleReconnect = () => {
     setState({ status: "closed" });
+    if (currentSocket === socket) currentSocket = null;
     setTimeout(() => connect(Math.min(retryMs * 2, MAX_RETRY_MS)), retryMs);
   };
 
@@ -70,4 +77,39 @@ export function useConnectionStatus(): ConnectionStatus {
 
 export function useSnapshot(): SnapshotData | null {
   return useSyncExternalStore(subscribe, () => getState().snapshot);
+}
+
+function sendMessage(message: Record<string, unknown>): void {
+  if (currentSocket && currentSocket.readyState === WebSocket.OPEN) {
+    currentSocket.send(JSON.stringify(message));
+  }
+}
+
+/** Fetches a task's full body text on demand when ID is non-null (not
+ * part of the main snapshot broadcast -- some entries have long bodies,
+ * not worth sending for every task on every save). Returns undefined
+ * while loading; null once resolved with no body / an id the backend
+ * couldn't find; otherwise the body text. */
+export function useTaskBody(id: string | null): string | null | undefined {
+  const [body, setBody] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!id) {
+      setBody(undefined);
+      return;
+    }
+    setBody(undefined);
+    const onMessage = (msg: IncomingMessage) => {
+      if (msg.type === "task-body" && msg.id === id) {
+        setBody(msg.body);
+      }
+    };
+    messageListeners.add(onMessage);
+    sendMessage({ type: "task-body-request", id });
+    return () => {
+      messageListeners.delete(onMessage);
+    };
+  }, [id]);
+
+  return body;
 }

@@ -11,6 +11,7 @@
 
 (require 'websocket)
 (require 'cl-lib)
+(require 'json)
 (require 'k-agenda-model)
 (require 'k-agenda-protocol)
 
@@ -33,6 +34,21 @@
 (defun k-agenda-ws--on-close (ws)
   "Stop tracking WS."
   (setq k-agenda-ws--clients (delq ws k-agenda-ws--clients)))
+
+(defun k-agenda-ws--on-message (ws frame)
+  "Handle an incoming client request. The only request type today is
+`task-body-request' (sent when the browser opens a task's detail
+modal) -- a full entry body isn't worth broadcasting for every task on
+every snapshot, so it's fetched on demand instead, straight back to the
+requesting socket only (never broadcast)."
+  (condition-case err
+      (let* ((payload (json-read-from-string (websocket-frame-payload frame)))
+             (type (cdr (assoc 'type payload))))
+        (when (equal type "task-body-request")
+          (let ((id (cdr (assoc 'id payload))))
+            (when id
+              (websocket-send-text ws (k-agenda-protocol-encode-task-body id))))))
+    (error (message "k-agenda: malformed client message ignored: %s" err))))
 
 (defun k-agenda-ws--broadcast ()
   "Send a fresh snapshot to every live client. Prunes closed sockets first."
@@ -73,7 +89,8 @@ non-agenda Org files too, and those edits must not trigger a broadcast."
   (setq k-agenda-ws--server
         (websocket-server port
                            :on-open #'k-agenda-ws--on-open
-                           :on-close #'k-agenda-ws--on-close))
+                           :on-close #'k-agenda-ws--on-close
+                           :on-message #'k-agenda-ws--on-message))
   (add-hook 'org-after-todo-state-change-hook #'k-agenda-ws--on-todo-state-change)
   (add-hook 'after-save-hook #'k-agenda-ws--on-after-save))
 

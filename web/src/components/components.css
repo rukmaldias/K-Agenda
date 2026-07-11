@@ -400,3 +400,35 @@
   color: var(--text-muted);
   text-align: center;
 }
+
+.k-modal__section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-top: 18px;
+  margin-bottom: 8px;
+}
+
+.k-modal__body-loading {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.k-modal__body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  background: var(--page-plane);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow-y: auto;
+}

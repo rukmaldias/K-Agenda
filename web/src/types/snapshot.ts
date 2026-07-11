@@ -53,3 +53,17 @@ export interface SnapshotMessage {
   type: "snapshot";
   data: SnapshotData;
 }
+
+// Sent by the browser when a task's detail modal opens -- a full body
+// isn't worth including in every snapshot broadcast (some entries have
+// long bodies), so it's fetched on demand instead.
+export interface TaskBodyRequest {
+  type: "task-body-request";
+  id: string;
+}
+
+export interface TaskBodyMessage {
+  type: "task-body";
+  id: string;
+  body: string | null;
+}

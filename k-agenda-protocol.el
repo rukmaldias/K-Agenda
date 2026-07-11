@@ -173,5 +173,16 @@ null `todoState' so it's still visible as a typed, state-less item."
     (json-encode (list (cons 'type "snapshot")
                         (cons 'data (k-agenda-protocol-build-snapshot))))))
 
+(defun k-agenda-protocol-encode-task-body (id)
+  "Look up ID's body (see `k-agenda-model-body-for-id') and return the
+`task-body' response as a JSON string. `body' is null if ID doesn't
+resolve to any current entry (stale id, or a real request for a
+heading that no longer exists)."
+  (let ((json-false :json-false)
+        (json-null nil))
+    (json-encode (list (cons 'type "task-body")
+                        (cons 'id id)
+                        (cons 'body (k-agenda-model-body-for-id id))))))
+
 (provide 'k-agenda-protocol)
 ;;; k-agenda-protocol.el ends here
