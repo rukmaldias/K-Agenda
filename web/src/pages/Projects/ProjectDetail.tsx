@@ -5,8 +5,10 @@ import { useSnapshot } from "../../lib/ws";
 import { earliestDueDate, humanizeDueDate } from "../../lib/date";
 import { isDoneState } from "../../lib/todoKeywords";
 import { formatMinutes, parseEffortMinutes, sectionFor } from "../../lib/effort";
+import { KNOWN_CAPTURE_TYPES } from "../../lib/captureTypes";
 import { useTaskDetail } from "../../state/taskDetail";
 import { StateBadge } from "../../components/StateBadge";
+import { TypeBadge } from "../../components/TypeBadge";
 import type { SnapshotData, Task } from "../../types/snapshot";
 
 const ALL = "__all__";
@@ -32,6 +34,8 @@ export function ProjectDetail() {
   const snapshot = useSnapshot();
   const { openTask } = useTaskDetail();
   const [priorityFilter, setPriorityFilter] = useState(ALL);
+  const [stateFilter, setStateFilter] = useState(ALL);
+  const [typeFilter, setTypeFilter] = useState(ALL);
 
   const decodedName = decodeURIComponent(projectName ?? "");
 
@@ -45,6 +49,10 @@ export function ProjectDetail() {
       projectName={decodedName}
       priorityFilter={priorityFilter}
       onPriorityFilterChange={setPriorityFilter}
+      stateFilter={stateFilter}
+      onStateFilterChange={setStateFilter}
+      typeFilter={typeFilter}
+      onTypeFilterChange={setTypeFilter}
       onOpenTask={openTask}
       onSwitchProject={(name) => navigate(`/projects/${encodeURIComponent(name)}`)}
     />
@@ -56,6 +64,10 @@ interface ProjectDetailBodyProps {
   projectName: string;
   priorityFilter: string;
   onPriorityFilterChange: (value: string) => void;
+  stateFilter: string;
+  onStateFilterChange: (value: string) => void;
+  typeFilter: string;
+  onTypeFilterChange: (value: string) => void;
   onOpenTask: (task: Task) => void;
   onSwitchProject: (name: string) => void;
 }
@@ -65,6 +77,10 @@ function ProjectDetailBody({
   projectName,
   priorityFilter,
   onPriorityFilterChange,
+  stateFilter,
+  onStateFilterChange,
+  typeFilter,
+  onTypeFilterChange,
   onOpenTask,
   onSwitchProject,
 }: ProjectDetailBodyProps) {
@@ -107,9 +123,11 @@ function ProjectDetailBody({
     return allTasks
       .filter((t) => !isDoneState(snapshot, t.todoState) && earliestDueDate(t))
       .filter((t) => (priorityFilter === ALL ? true : t.priority === priorityFilter))
+      .filter((t) => (stateFilter === ALL ? true : t.todoState === stateFilter))
+      .filter((t) => (typeFilter === ALL ? true : t.type === typeFilter))
       .sort((a, b) => new Date(earliestDueDate(a)!).getTime() - new Date(earliestDueDate(b)!).getTime())
       .slice(0, UPCOMING_LIMIT);
-  }, [allTasks, snapshot, priorityFilter]);
+  }, [allTasks, snapshot, priorityFilter, stateFilter, typeFilter]);
 
   const overdueTasks = useMemo(() => {
     return allTasks
@@ -249,6 +267,30 @@ function ProjectDetailBody({
               </div>
               <select
                 className="k-page-toolbar__select"
+                value={stateFilter}
+                onChange={(e) => onStateFilterChange(e.target.value)}
+              >
+                <option value={ALL}>All states</option>
+                {snapshot.todoKeywords.map((k) => (
+                  <option key={k.name} value={k.name}>
+                    {k.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="k-page-toolbar__select"
+                value={typeFilter}
+                onChange={(e) => onTypeFilterChange(e.target.value)}
+              >
+                <option value={ALL}>All types</option>
+                {KNOWN_CAPTURE_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="k-page-toolbar__select"
                 value={priorityFilter}
                 onChange={(e) => onPriorityFilterChange(e.target.value)}
               >
@@ -267,6 +309,7 @@ function ProjectDetailBody({
                 <thead>
                   <tr>
                     <th>State</th>
+                    <th>Type</th>
                     <th>Title</th>
                     <th>Est. Time</th>
                     <th>Due</th>
@@ -281,6 +324,9 @@ function ProjectDetailBody({
                     >
                       <td>
                         <StateBadge snapshot={snapshot} todoState={task.todoState} />
+                      </td>
+                      <td>
+                        <TypeBadge type={task.type} />
                       </td>
                       <td className="k-table__title-cell">{task.title}</td>
                       <td className="k-table__muted">{formatMinutes(parseEffortMinutes(task.effort))}</td>
