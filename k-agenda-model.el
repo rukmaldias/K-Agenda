@@ -159,6 +159,39 @@ edit -- see `k-agenda-model--entry-id')."
        nil files)
       nil)))
 
+(defun k-agenda-model-change-state (id from-state new-state)
+  "Change the TODO state of the entry matching ID from FROM-STATE to
+NEW-STATE via `org-todo' (so logging/timestamps/faces behave exactly as
+`C-c C-t' would), then save the buffer immediately.
+
+FROM-STATE is a staleness guard: ID is re-resolved fresh against the
+current buffer, but if its CURRENT todo-state doesn't match FROM-STATE,
+the write is refused rather than trusting a possibly-stale id from an
+older snapshot -- someone may have changed it in Emacs already, or (far
+rarer) a hash-based id may now resolve to a different heading after an
+intervening edit shifted character positions (see
+`k-agenda-model--entry-id').
+
+Returns a plist:
+  (:ok t)
+  (:ok nil :reason \"stale\" :current-state STRING-OR-NIL)
+  (:ok nil :reason \"not-found\")"
+  (let ((files (k-agenda-model-agenda-files)))
+    (or (catch 'k-agenda-model-change-state-done
+          (org-map-entries
+           (lambda ()
+             (when (equal (k-agenda-model--entry-id) id)
+               (let ((current (org-get-todo-state)))
+                 (if (not (equal current from-state))
+                     (throw 'k-agenda-model-change-state-done
+                            (list :ok nil :reason "stale" :current-state current))
+                   (org-todo new-state)
+                   (save-buffer)
+                   (throw 'k-agenda-model-change-state-done (list :ok t))))))
+           nil files)
+          nil)
+        (list :ok nil :reason "not-found"))))
+
 (defun k-agenda-model--project-buckets (entries)
   "Group ENTRIES by `:project', returning an alist of (name . entries).
 Entries with a nil `:project' (anything outside a project file) are

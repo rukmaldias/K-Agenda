@@ -19,6 +19,7 @@
 ;;; Code:
 
 (require 'k-agenda-model)
+(require 'k-agenda-workflow)
 (require 'cl-lib)
 (require 'json)
 
@@ -183,6 +184,46 @@ heading that no longer exists)."
     (json-encode (list (cons 'type "task-body")
                         (cons 'id id)
                         (cons 'body (k-agenda-model-body-for-id id))))))
+
+(defun k-agenda-protocol--change-state-response (request-id ok &optional reason message)
+  "Build the `change-state-response' JSON string. REASON/MESSAGE are only
+included when non-nil (an OK response has neither)."
+  (let ((json-false :json-false)
+        (json-null nil))
+    (json-encode
+     (append (list (cons 'type "change-state-response")
+                   (cons 'requestId request-id)
+                   (cons 'ok (if ok t :json-false)))
+             (when reason (list (cons 'reason reason)))
+             (when message (list (cons 'message message)))))))
+
+(defun k-agenda-protocol-handle-change-state-request (request-id id from-state to-state)
+  "Validate and, if valid, perform a drag-and-drop TODO-state change.
+Re-validates FROM-STATE -> TO-STATE against `k-agenda-workflow-valid-p'
+server-side regardless of what the client already checked -- a
+mutating action never trusts client-side validation alone. Returns the
+`change-state-response' JSON string."
+  (cond
+   ((equal from-state to-state)
+    (k-agenda-protocol--change-state-response request-id t))
+   ((not (k-agenda-workflow-valid-p from-state to-state))
+    (k-agenda-protocol--change-state-response
+     request-id nil "invalid-transition"
+     (k-agenda-workflow-rejection-message from-state to-state)))
+   (t
+    (let ((result (k-agenda-model-change-state id from-state to-state)))
+      (if (plist-get result :ok)
+          (k-agenda-protocol--change-state-response request-id t)
+        (let ((reason (plist-get result :reason)))
+          (k-agenda-protocol--change-state-response
+           request-id nil reason
+           (cond
+            ((equal reason "stale")
+             (format "This task's state has changed since it was loaded (now: %s). Refresh and try again."
+                     (or (plist-get result :current-state) "unknown")))
+            ((equal reason "not-found")
+             "This task couldn't be found anymore -- it may have been deleted or moved.")
+            (t "Couldn't change the task's state.")))))))))
 
 (provide 'k-agenda-protocol)
 ;;; k-agenda-protocol.el ends here

@@ -76,11 +76,15 @@
 }
 
 .k-board__card--clickable {
-  cursor: pointer;
+  cursor: grab;
 }
 
 .k-board__card--clickable:hover {
   border-color: var(--border-strong);
+}
+
+.k-board__card--clickable:active {
+  cursor: grabbing;
 }
 
 .k-board__card-title {

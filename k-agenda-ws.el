@@ -36,18 +36,38 @@
   (setq k-agenda-ws--clients (delq ws k-agenda-ws--clients)))
 
 (defun k-agenda-ws--on-message (ws frame)
-  "Handle an incoming client request. The only request type today is
-`task-body-request' (sent when the browser opens a task's detail
-modal) -- a full entry body isn't worth broadcasting for every task on
-every snapshot, so it's fetched on demand instead, straight back to the
-requesting socket only (never broadcast)."
+  "Handle an incoming client request.
+
+`task-body-request': sent when the browser opens a task's detail modal
+-- a full entry body isn't worth broadcasting for every task on every
+snapshot, so it's fetched on demand instead.
+
+`change-state-request': sent when a K Board drag-and-drop is confirmed
+-- the only mutating request type. Re-validated server-side regardless
+of what the client already checked (see
+`k-agenda-protocol-handle-change-state-request'); on success this saves
+the buffer, which fires `after-save-hook' and so triggers the normal
+debounced broadcast to every client shortly after.
+
+Both responses go straight back to the requesting socket only, never
+broadcast to others."
   (condition-case err
       (let* ((payload (json-read-from-string (websocket-frame-payload frame)))
              (type (cdr (assoc 'type payload))))
-        (when (equal type "task-body-request")
+        (cond
+         ((equal type "task-body-request")
           (let ((id (cdr (assoc 'id payload))))
             (when id
-              (websocket-send-text ws (k-agenda-protocol-encode-task-body id))))))
+              (websocket-send-text ws (k-agenda-protocol-encode-task-body id)))))
+         ((equal type "change-state-request")
+          (let ((request-id (cdr (assoc 'requestId payload)))
+                (id (cdr (assoc 'id payload)))
+                (from-state (cdr (assoc 'fromState payload)))
+                (to-state (cdr (assoc 'toState payload))))
+            (when (and id from-state to-state)
+              (websocket-send-text
+               ws (k-agenda-protocol-handle-change-state-request
+                   request-id id from-state to-state)))))))
     (error (message "k-agenda: malformed client message ignored: %s" err))))
 
 (defun k-agenda-ws--broadcast ()

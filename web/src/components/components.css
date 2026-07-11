@@ -432,3 +432,47 @@
   max-height: 320px;
   overflow-y: auto;
 }
+
+/* --- Confirm / block dialog (drag-and-drop state changes) --- */
+
+.k-confirm-dialog {
+  max-width: 440px;
+}
+
+.k-confirm-dialog__message {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 10px 0 20px;
+}
+
+.k-confirm-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.k-confirm-dialog__button {
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.k-confirm-dialog__button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.k-confirm-dialog__button--secondary {
+  background: var(--surface-1);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.k-confirm-dialog__button--primary {
+  background: var(--accent);
+  color: #ffffff;
+}

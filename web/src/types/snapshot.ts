@@ -67,3 +67,23 @@ export interface TaskBodyMessage {
   id: string;
   body: string | null;
 }
+
+// Sent when a K Board drag-and-drop is confirmed -- the only mutating
+// request type. The backend re-validates the transition independently;
+// isValidTransition() client-side (lib/workflow.ts) is just so an
+// invalid drop can be rejected instantly, without a round trip.
+export interface ChangeStateRequest {
+  type: "change-state-request";
+  requestId: string;
+  id: string;
+  fromState: string;
+  toState: string;
+}
+
+export interface ChangeStateResponse {
+  type: "change-state-response";
+  requestId: string;
+  ok: boolean;
+  reason?: "invalid-transition" | "stale" | "not-found";
+  message?: string;
+}

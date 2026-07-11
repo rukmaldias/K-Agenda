@@ -241,5 +241,47 @@ heading that's since been deleted) resolves to nil, not an error."
       ((project "* Project\n\n** TODO Some task\n"))
     (should (null (k-agenda-model-body-for-id "not-a-real-id")))))
 
+(ert-deftest k-agenda-test-change-state-succeeds-and-persists-to-disk ()
+  "A matching id + correct fromState changes the heading's TODO keyword
+via `org-todo' and saves the buffer -- verified by re-reading the raw
+file content from disk, not just in-memory buffer state."
+  (k-agenda-test-with-fixture-files
+      ((project "* Project\n\n** TODO Some task\n"))
+    (let* ((entries (k-agenda-model-collect-entries))
+           (task (cl-find "Some task" entries
+                           :key (lambda (e) (plist-get e :title)) :test #'equal))
+           (result (k-agenda-model-change-state (plist-get task :id) "TODO" "NEXT")))
+      (should (plist-get result :ok))
+      (with-temp-buffer
+        (insert-file-contents project)
+        (should (string-match-p "^\\*\\* NEXT Some task" (buffer-string)))))))
+
+(ert-deftest k-agenda-test-change-state-refuses-when-state-is-stale ()
+  "If the entry's CURRENT state doesn't match the caller's believed
+fromState (someone else changed it since the snapshot was taken, or a
+hash-based id drifted), the write is refused rather than blindly
+applied, and nothing is written to disk."
+  (k-agenda-test-with-fixture-files
+      ((project "* Project\n\n** WAITING Some task\n"))
+    (let* ((entries (k-agenda-model-collect-entries))
+           (task (cl-find "Some task" entries
+                           :key (lambda (e) (plist-get e :title)) :test #'equal))
+           ;; Caller believes it's TODO, but it's actually WAITING.
+           (result (k-agenda-model-change-state (plist-get task :id) "TODO" "NEXT")))
+      (should-not (plist-get result :ok))
+      (should (equal (plist-get result :reason) "stale"))
+      (should (equal (plist-get result :current-state) "WAITING"))
+      (with-temp-buffer
+        (insert-file-contents project)
+        (should (string-match-p "^\\*\\* WAITING Some task" (buffer-string)))))))
+
+(ert-deftest k-agenda-test-change-state-not-found-for-unknown-id ()
+  "An id that doesn't resolve to any current entry fails cleanly."
+  (k-agenda-test-with-fixture-files
+      ((project "* Project\n\n** TODO Some task\n"))
+    (let ((result (k-agenda-model-change-state "not-a-real-id" "TODO" "NEXT")))
+      (should-not (plist-get result :ok))
+      (should (equal (plist-get result :reason) "not-found")))))
+
 (provide 'k-agenda-model-test)
 ;;; k-agenda-model-test.el ends here

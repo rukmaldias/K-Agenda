@@ -1,9 +1,14 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import type { SnapshotData, SnapshotMessage, TaskBodyMessage } from "../types/snapshot";
+import type {
+  ChangeStateResponse,
+  SnapshotData,
+  SnapshotMessage,
+  TaskBodyMessage,
+} from "../types/snapshot";
 
 export type ConnectionStatus = "connecting" | "open" | "closed";
 
-type IncomingMessage = SnapshotMessage | TaskBodyMessage;
+type IncomingMessage = SnapshotMessage | TaskBodyMessage | ChangeStateResponse;
 
 interface StoreState {
   status: ConnectionStatus;
@@ -112,4 +117,37 @@ export function useTaskBody(id: string | null): string | null | undefined {
   }, [id]);
 
   return body;
+}
+
+const CHANGE_STATE_TIMEOUT_MS = 8000;
+
+/** Sends a drag-and-drop state-change request and resolves with the
+ * server's response. Rejects only on timeout (no response within
+ * CHANGE_STATE_TIMEOUT_MS, e.g. the connection dropped mid-flight) --
+ * an authoritative accept/reject always comes back as a resolved
+ * promise with `ok` true/false, never a thrown error. */
+export function requestChangeState(
+  id: string,
+  fromState: string,
+  toState: string
+): Promise<ChangeStateResponse> {
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      messageListeners.delete(onMessage);
+      reject(new Error("Timed out waiting for a response."));
+    }, CHANGE_STATE_TIMEOUT_MS);
+
+    function onMessage(msg: IncomingMessage) {
+      if (msg.type === "change-state-response" && msg.requestId === requestId) {
+        clearTimeout(timeout);
+        messageListeners.delete(onMessage);
+        resolve(msg);
+      }
+    }
+
+    messageListeners.add(onMessage);
+    sendMessage({ type: "change-state-request", requestId, id, fromState, toState });
+  });
 }
