@@ -75,6 +75,14 @@
   padding: 10px 12px;
 }
 
+.k-board__card--clickable {
+  cursor: pointer;
+}
+
+.k-board__card--clickable:hover {
+  border-color: var(--border-strong);
+}
+
 .k-board__card-title {
   font-size: 13px;
   color: var(--text-primary);

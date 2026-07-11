@@ -4,6 +4,7 @@ import { earliestDueDate, humanizeDueDate } from "../../lib/date";
 import { KNOWN_CAPTURE_TYPES } from "../../lib/captureTypes";
 import { StateBadge } from "../../components/StateBadge";
 import { TypeBadge } from "../../components/TypeBadge";
+import { useTaskDetail } from "../../state/taskDetail";
 import type { Task } from "../../types/snapshot";
 
 const ALL = "__all__";
@@ -23,6 +24,7 @@ export function Inbox() {
   const [stateFilter, setStateFilter] = useState(ALL);
   const [typeFilter, setTypeFilter] = useState(ALL);
   const [projectFilter, setProjectFilter] = useState(ALL);
+  const { openTask } = useTaskDetail();
 
   const filtered = useMemo(() => {
     if (!snapshot) return [];
@@ -107,7 +109,7 @@ export function Inbox() {
             </thead>
             <tbody>
               {filtered.map((task) => (
-                <tr key={task.id}>
+                <tr key={task.id} className="k-table__row--clickable" onClick={() => openTask(task)}>
                   <td>
                     <StateBadge snapshot={snapshot} todoState={task.todoState} />
                   </td>

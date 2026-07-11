@@ -3,6 +3,7 @@ import type { SnapshotData, Task } from "../types/snapshot";
 import { formatTimeIfPresent, isSameDay, taskOccursOn } from "../lib/date";
 import { StateBadge } from "./StateBadge";
 import { TypeBadge } from "./TypeBadge";
+import { useTaskDetail } from "../state/taskDetail";
 
 interface DayTaskTableProps {
   snapshot: SnapshotData;
@@ -20,6 +21,7 @@ function dayTime(task: Task, day: Date): string | null {
 }
 
 export function DayTaskTable({ snapshot, day }: DayTaskTableProps) {
+  const { openTask } = useTaskDetail();
   const tasks = useMemo(
     () =>
       snapshot.tasks
@@ -52,7 +54,7 @@ export function DayTaskTable({ snapshot, day }: DayTaskTableProps) {
       </thead>
       <tbody>
         {tasks.map((task) => (
-          <tr key={task.id}>
+          <tr key={task.id} className="k-table__row--clickable" onClick={() => openTask(task)}>
             <td className="k-table__muted">{dayTime(task, day) ?? "—"}</td>
             <td>
               <StateBadge snapshot={snapshot} todoState={task.todoState} />

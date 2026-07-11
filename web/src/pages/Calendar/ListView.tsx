@@ -3,12 +3,14 @@ import type { SnapshotData } from "../../types/snapshot";
 import { earliestDueDate } from "../../lib/date";
 import { StateBadge } from "../../components/StateBadge";
 import { TypeBadge } from "../../components/TypeBadge";
+import { useTaskDetail } from "../../state/taskDetail";
 
 interface ListViewProps {
   snapshot: SnapshotData;
 }
 
 export function ListView({ snapshot }: ListViewProps) {
+  const { openTask } = useTaskDetail();
   const groups = useMemo(() => {
     const dated = snapshot.tasks
       .map((t) => ({ task: t, due: earliestDueDate(t) }))
@@ -43,7 +45,7 @@ export function ListView({ snapshot }: ListViewProps) {
           <table className="k-table">
             <tbody>
               {items.map(({ task }) => (
-                <tr key={task.id}>
+                <tr key={task.id} className="k-table__row--clickable" onClick={() => openTask(task)}>
                   <td>
                     <StateBadge snapshot={snapshot} todoState={task.todoState} />
                   </td>

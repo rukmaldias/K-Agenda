@@ -3,6 +3,7 @@ import { earliestDueDate, humanizeDueDate } from "../../lib/date";
 import { isDoneState } from "../../lib/todoKeywords";
 import { StateBadge } from "../../components/StateBadge";
 import { TypeBadge } from "../../components/TypeBadge";
+import { useTaskDetail } from "../../state/taskDetail";
 
 interface UpcomingTasksTableProps {
   snapshot: SnapshotData;
@@ -22,6 +23,7 @@ function upcomingTasks(snapshot: SnapshotData): Task[] {
 
 export function UpcomingTasksTable({ snapshot }: UpcomingTasksTableProps) {
   const tasks = upcomingTasks(snapshot);
+  const { openTask } = useTaskDetail();
 
   return (
     <div className="k-card k-upcoming">
@@ -41,7 +43,7 @@ export function UpcomingTasksTable({ snapshot }: UpcomingTasksTableProps) {
           </thead>
           <tbody>
             {tasks.map((task) => (
-              <tr key={task.id}>
+              <tr key={task.id} className="k-table__row--clickable" onClick={() => openTask(task)}>
                 <td>
                   <StateBadge snapshot={snapshot} todoState={task.todoState} />
                 </td>

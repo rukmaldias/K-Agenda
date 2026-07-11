@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useSnapshot } from "../../lib/ws";
 import { earliestDueDate, humanizeDueDate } from "../../lib/date";
+import { useTaskDetail } from "../../state/taskDetail";
 import type { Task } from "../../types/snapshot";
 
 const ALL = "__all__";
@@ -8,6 +9,7 @@ const ALL = "__all__";
 export function KBoard() {
   const snapshot = useSnapshot();
   const [projectFilter, setProjectFilter] = useState(ALL);
+  const { openTask } = useTaskDetail();
 
   const tasksByState = useMemo(() => {
     if (!snapshot) return new Map<string, Task[]>();
@@ -76,7 +78,11 @@ export function KBoard() {
                   <p className="k-board__column-empty">No tasks</p>
                 ) : (
                   tasks.map((task) => (
-                    <div key={task.id} className="k-board__card">
+                    <div
+                      key={task.id}
+                      className="k-board__card k-board__card--clickable"
+                      onClick={() => openTask(task)}
+                    >
                       <div className="k-board__card-title">{task.title}</div>
                       {task.project && (
                         <div className="k-board__card-project">{task.project}</div>
