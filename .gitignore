@@ -1,5 +1,18 @@
+# Build output (run `cd web && npm install && npm run build` after cloning)
 node_modules/
 out/
-*.elc
-.DS_Store
 web/dist/
+
+# Elisp
+*.elc
+
+# Emacs backup / autosave / lock files
+*~
+\#*\#
+.\#*
+
+# Editor / OS cruft
+.DS_Store
+
+# Logs
+*.log
