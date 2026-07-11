@@ -46,8 +46,16 @@ counts, even though its headings are still scanned for tasks -- see
     (format-time-string "%Y-%m-%dT%H:%M:%S%:z" time)))
 
 (defun k-agenda-model--buffer-title ()
-  "This buffer's `#+TITLE:' value, or nil if it has none."
-  (cadr (assoc "TITLE" (org-collect-keywords '("TITLE")))))
+  "This buffer's `#+TITLE:' value, or nil if it has none.
+
+Defensively strips a trailing Org tag group (`  :foo:bar:') if present --
+`#+TITLE:' is a plain keyword line, not a heading, so tags there are
+never meaningful Org syntax, only ever a stray copy-paste (e.g. from
+`org-set-tags-command' firing on the wrong line, or a heading's
+tag-alignment whitespace pattern typed straight into the title)."
+  (let ((title (cadr (assoc "TITLE" (org-collect-keywords '("TITLE"))))))
+    (when title
+      (replace-regexp-in-string "[ \t]+:[[:alnum:]_@#%:]+:[ \t]*\\'" "" title))))
 
 (defun k-agenda-model--project-for-entry ()
   "Return the project name for the entry at point, or nil if the current

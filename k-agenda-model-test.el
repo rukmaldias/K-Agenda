@@ -90,6 +90,21 @@ Study Plan, heading text \"Gen-AI Learning\")."
        (should task)
        (should (equal (plist-get task :project) "GenAI Career Study Plan"))))))
 
+(ert-deftest k-agenda-test-project-file-title-strips-stray-trailing-tag ()
+  "A `#+TITLE:' line with a stray trailing tag group (as literally found
+in the real project_x.org -- `#+TITLE: Project X    :project_x:', likely
+from org-set-tags-command firing on the wrong line) has that tag group
+stripped -- #+TITLE is a keyword line, not a heading, so tags there are
+never meaningful syntax, only noise."
+  (k-agenda-test--call-with-project-dir
+   '(("project_x.org" . "#+TITLE: Project X                                                 :project_x:\n\n* Project_X                                                       :project_x:\n\n** TODO Fix Jenkins\n"))
+   (lambda (_dir)
+     (let* ((entries (k-agenda-model-collect-entries))
+            (task (cl-find "Fix Jenkins" entries
+                            :key (lambda (e) (plist-get e :title)) :test #'equal)))
+       (should task)
+       (should (equal (plist-get task :project) "Project X"))))))
+
 (ert-deftest k-agenda-test-project-file-falls-back-to-heading-without-title ()
   "A project file with no `#+TITLE:' uses its level-1 heading text --
 matching the real project_x.org."
