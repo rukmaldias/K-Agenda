@@ -159,4 +159,4 @@ emacs -Q --batch -L . -l ert \
 
 ## License
 
-Not yet specified — ask before reusing this code elsewhere.
+[GNU General Public License v3.0](LICENSE)
