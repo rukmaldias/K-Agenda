@@ -114,7 +114,8 @@ files returned by `k-agenda-model--agenda-files'."
         :file (file-name-nondirectory (buffer-file-name))
         :level (org-outline-level)
         :olp (org-get-outline-path)
-        :capture-type (org-entry-get (point) "CAPTURE_TYPE")))
+        :capture-type (org-entry-get (point) "CAPTURE_TYPE")
+        :effort (org-entry-get (point) "Effort")))
 
 (defun k-agenda-model-collect-entries ()
   "Walk every heading in `org-agenda-files' and return a list of entry plists.

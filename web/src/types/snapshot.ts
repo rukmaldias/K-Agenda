@@ -39,6 +39,8 @@ export interface Task {
   scheduled: string | null;
   deadline: string | null;
   closed: string | null;
+  /** Org's :Effort: property, raw "H:MM" string (e.g. "4:00"), or null. */
+  effort: string | null;
 }
 
 export interface SnapshotData {

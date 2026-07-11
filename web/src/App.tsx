@@ -3,6 +3,7 @@ import { AppShell } from "./shell/AppShell";
 import { Dashboard } from "./pages/Dashboard/Dashboard";
 import { MyAgenda } from "./pages/Agenda/MyAgenda";
 import { Projects } from "./pages/Projects/Projects";
+import { ProjectDetail } from "./pages/Projects/ProjectDetail";
 import { Inbox } from "./pages/Inbox/Inbox";
 import { KBoard } from "./pages/Board/KBoard";
 import { Calendar } from "./pages/Calendar/Calendar";
@@ -35,6 +36,14 @@ function App() {
           element={
             <AppShell title="Projects">
               <Projects />
+            </AppShell>
+          }
+        />
+        <Route
+          path="/projects/:projectName"
+          element={
+            <AppShell title="Projects">
+              <ProjectDetail />
             </AppShell>
           }
         />

@@ -143,7 +143,8 @@ Dashboard just slices client-side."
         (cons 'olp (k-agenda-protocol--vec (plist-get entry :olp)))
         (cons 'scheduled (plist-get entry :scheduled))
         (cons 'deadline (plist-get entry :deadline))
-        (cons 'closed (plist-get entry :closed))))
+        (cons 'closed (plist-get entry :closed))
+        (cons 'effort (plist-get entry :effort))))
 
 (defun k-agenda-protocol--tasks-payload (entries)
   "Build the `tasks' array: entries with a TODO state OR a recognized

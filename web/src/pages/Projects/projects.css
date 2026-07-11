@@ -7,3 +7,97 @@
 .k-projects__list {
   max-width: 640px;
 }
+
+/* --- Project detail (dashboard) page --- */
+
+.k-project-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.k-project-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.k-project-detail__title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.k-project-detail__progress-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.k-project-detail__progress-track {
+  height: 26px;
+  border-radius: 999px;
+  background: var(--gridline);
+  overflow: hidden;
+}
+
+.k-project-detail__progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 0;
+  transition: width 0.3s ease;
+}
+
+.k-project-detail__progress-label {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.k-project-detail__milestone {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.k-project-detail__milestone--muted {
+  color: var(--text-muted);
+}
+
+.k-project-detail__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.k-project-detail__col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.k-project-detail__donut {
+  position: relative;
+}
+
+.k-project-detail__overdue .k-card__title {
+  color: #d03b3b;
+}
+
+@media (max-width: 900px) {
+  .k-project-detail__grid {
+    grid-template-columns: 1fr;
+  }
+}

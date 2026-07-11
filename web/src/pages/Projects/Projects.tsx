@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useSnapshot } from "../../lib/ws";
 
 export function Projects() {
@@ -22,7 +23,12 @@ export function Projects() {
           <ul className="k-progress-list k-projects__list">
             {projects.map((project) => (
               <li key={project.name} className="k-progress-row">
-                <div className="k-progress-row__name">{project.name}</div>
+                <Link
+                  to={`/projects/${encodeURIComponent(project.name)}`}
+                  className="k-progress-row__name k-progress-row__name--link"
+                >
+                  {project.name}
+                </Link>
                 <div className="k-progress-row__meta">
                   {project.file} · {project.total} task{project.total === 1 ? "" : "s"}
                   {project.cancelled > 0 ? ` · ${project.cancelled} cancelled` : ""} ·{" "}
