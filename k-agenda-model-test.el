@@ -117,6 +117,25 @@ matching the real project_x.org."
        (should task)
        (should (equal (plist-get task :project) "Project X"))))))
 
+(ert-deftest k-agenda-test-project-match-is-case-insensitive-when-fs-is ()
+  "Regression test: on Windows (and default macOS), the same file's path
+can resolve with a different drive-letter/segment casing depending on
+how it was opened (`c:/Users/...' via the minibuffer vs `C:/Users/...'
+as written in `org-agenda-files'), even though the file system treats
+them as identical. This is what silently dropped the project name for
+a real project file -- the file itself was in the right directory, the
+comparison just never matched, without ever raising an error."
+  (cl-letf (((symbol-function 'file-name-case-insensitive-p) (lambda (_) t)))
+    (should (k-agenda-model--file-name-equal-p
+             "c:/Users/HP/Documents/Org/organizer/projects/x.org"
+             "C:/Users/HP/Documents/Org/organizer/projects/x.org"))))
+
+(ert-deftest k-agenda-test-project-match-respects-case-sensitive-fs ()
+  "On a case-sensitive file system, differently-cased paths are genuinely
+different files and must not be treated as a match."
+  (cl-letf (((symbol-function 'file-name-case-insensitive-p) (lambda (_) nil)))
+    (should-not (k-agenda-model--file-name-equal-p "/tmp/A.org" "/tmp/a.org"))))
+
 (ert-deftest k-agenda-test-multiple-files-in-project-dir-are-separate-projects ()
   "Each file inside the projects/ directory is its own project bucket --
 adding a new project = adding a new file, per the user's own

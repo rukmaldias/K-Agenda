@@ -36,9 +36,22 @@ counts, even though its headings are still scanned for tasks -- see
             (push f result)))))
     (nreverse result)))
 
+(defun k-agenda-model--file-name-equal-p (a b)
+  "Compare file paths A and B for equality, case-insensitively when the
+underlying file system is (e.g. Windows, default macOS). Without this,
+a path that resolves with different drive-letter/segment casing
+depending on how it was opened (`c:/Users/...' from the minibuffer vs
+`C:/Users/...' as written in `org-agenda-files') would silently fail to
+match, even though the file system itself treats them as identical."
+  (if (file-name-case-insensitive-p a)
+      (eq t (compare-strings a nil nil b nil nil t))
+    (string-equal a b)))
+
 (defun k-agenda-model--project-file-p (file)
   "Non-nil if FILE is one of `k-agenda-model-project-files'."
-  (member (expand-file-name file) (k-agenda-model-project-files)))
+  (let ((expanded (expand-file-name file)))
+    (cl-some (lambda (f) (k-agenda-model--file-name-equal-p expanded f))
+             (k-agenda-model-project-files))))
 
 (defun k-agenda-model--iso8601 (time)
   "Format TIME (an Emacs time value or nil) as an ISO 8601 string, or nil."
