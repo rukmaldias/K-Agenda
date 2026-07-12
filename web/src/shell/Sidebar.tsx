@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: "/inbox", label: "Inbox", icon: "📥" },
   { to: "/board", label: "K Board", icon: "🗂" },
   { to: "/calendar", label: "Calendar", icon: "🗓" },
+  { to: "/roadmap", label: "Roadmap", icon: "🗺" },
 ];
 
 export function Sidebar() {

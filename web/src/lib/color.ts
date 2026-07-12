@@ -1,3 +1,18 @@
+// Same categorical order/hues the dataviz skill's default palette uses,
+// distinct from state colors (which stay tied to the user's Emacs theme).
+// Shared by ProjectDetail's effort donut and Roadmap's swimlanes so a given
+// section reads as the same color everywhere it appears.
+export const SECTION_COLORS = [
+  "#2a78d6",
+  "#1baf7a",
+  "#eda100",
+  "#008300",
+  "#4a3aa7",
+  "#e34948",
+  "#e87ba4",
+  "#eb6834",
+];
+
 // Picks readable text color (near-black or white) against a given fill,
 // by WCAG relative luminance -- used so badges filled with the user's own
 // org-todo-keyword-faces color (arbitrary, not chosen for contrast) still

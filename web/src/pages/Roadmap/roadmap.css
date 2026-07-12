@@ -1,0 +1,154 @@
+.k-roadmap {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.k-roadmap__undated-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* --- Chart --- */
+
+.k-roadmap-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.k-roadmap-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.k-roadmap-chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.k-roadmap-chart__legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.k-roadmap-chart__scroll {
+  overflow-x: auto;
+}
+
+.k-roadmap-chart__timeline {
+  position: relative;
+}
+
+.k-roadmap-chart__header-row {
+  display: flex;
+  border-bottom: 1px solid var(--gridline);
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+}
+
+.k-roadmap-chart__month {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.k-roadmap-chart__body {
+  position: relative;
+}
+
+.k-roadmap-chart__section + .k-roadmap-chart__section {
+  margin-top: 10px;
+}
+
+.k-roadmap-chart__section-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--page-plane);
+  border-radius: var(--radius-md);
+  padding: 5px 10px;
+  margin-bottom: 4px;
+}
+
+.k-roadmap-chart__row {
+  position: relative;
+  height: 30px;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+
+.k-roadmap-chart__row:hover {
+  background: var(--page-plane);
+}
+
+/* Purely decorative duration pill -- the row itself is the click target,
+   so this never needs to hold the label text (which would otherwise be
+   clipped to nothing for the many single-day tasks org-agenda produces). */
+.k-roadmap-chart__marker {
+  position: absolute;
+  top: 8px;
+  height: 14px;
+  min-width: 14px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.k-roadmap-chart__marker--milestone {
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3px var(--border-strong);
+}
+
+.k-roadmap-chart__label {
+  position: absolute;
+  top: 0;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.k-roadmap-chart__row:hover .k-roadmap-chart__label {
+  color: var(--accent);
+}
+
+.k-roadmap-chart__label-icon {
+  flex-shrink: 0;
+}
+
+.k-roadmap-chart__gridlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.k-roadmap-chart__gridline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--gridline);
+}
+
+.k-roadmap-chart__today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}

@@ -7,6 +7,7 @@ import { ProjectDetail } from "./pages/Projects/ProjectDetail";
 import { Inbox } from "./pages/Inbox/Inbox";
 import { KBoard } from "./pages/Board/KBoard";
 import { Calendar } from "./pages/Calendar/Calendar";
+import { Roadmap } from "./pages/Roadmap/Roadmap";
 import { TaskDetailProvider } from "./state/taskDetail";
 import { TaskDetailModal } from "./components/TaskDetailModal";
 
@@ -68,6 +69,14 @@ function App() {
           element={
             <AppShell title="Calendar">
               <Calendar />
+            </AppShell>
+          }
+        />
+        <Route
+          path="/roadmap"
+          element={
+            <AppShell title="Roadmap">
+              <Roadmap />
             </AppShell>
           }
         />

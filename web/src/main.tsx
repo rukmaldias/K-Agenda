@@ -10,6 +10,7 @@ import "./pages/Inbox/inbox.css";
 import "./pages/Board/board.css";
 import "./pages/Agenda/agenda.css";
 import "./pages/Calendar/calendar.css";
+import "./pages/Roadmap/roadmap.css";
 import App from "./App.tsx";
 
 createRoot(document.getElementById("root")!).render(

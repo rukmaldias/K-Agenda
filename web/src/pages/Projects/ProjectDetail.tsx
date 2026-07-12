@@ -6,6 +6,7 @@ import { earliestDueDate, humanizeDueDate } from "../../lib/date";
 import { isDoneState } from "../../lib/todoKeywords";
 import { formatMinutes, parseEffortMinutes, sectionFor } from "../../lib/effort";
 import { KNOWN_CAPTURE_TYPES } from "../../lib/captureTypes";
+import { SECTION_COLORS } from "../../lib/color";
 import { useTaskDetail } from "../../state/taskDetail";
 import { StateBadge } from "../../components/StateBadge";
 import { TypeBadge } from "../../components/TypeBadge";
@@ -14,11 +15,7 @@ import type { SnapshotData, Task } from "../../types/snapshot";
 const ALL = "__all__";
 const UPCOMING_LIMIT = 10;
 
-// Same categorical order/hues the dataviz skill's default palette uses,
-// distinct from state colors (which stay tied to the user's Emacs theme).
-const SECTION_COLORS = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948", "#e87ba4", "#eb6834"];
-
-function isMilestone(task: Task): boolean {
+export function isMilestone(task: Task): boolean {
   return /^milestone\b/i.test(task.title) || task.tags.includes("milestone");
 }
 
