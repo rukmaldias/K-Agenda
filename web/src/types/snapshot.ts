@@ -59,7 +59,6 @@ export interface SnapshotData {
   stats: Stats;
   projects: ProjectProgress[];
   tasks: Task[];
-  referenceTree: ReferenceNode[];
 }
 
 export interface SnapshotMessage {
@@ -93,6 +92,21 @@ export interface ReferenceBodyMessage {
   type: "reference-body";
   id: string;
   body: string | null;
+}
+
+// Sent by the browser once, when the References page mounts -- the tree
+// isn't part of the main snapshot (building it parses every reference
+// file, expensive enough with 90+ docs that baking it into every
+// snapshot broadcast noticeably stalled the app on unrelated edits).
+// Also pushed unprompted by the backend after a reference file is
+// edited, so the tree stays live without a re-request.
+export interface ReferenceTreeRequest {
+  type: "reference-tree-request";
+}
+
+export interface ReferenceTreeMessage {
+  type: "reference-tree";
+  tree: ReferenceNode[];
 }
 
 // Sent when a K Board drag-and-drop is confirmed -- the only mutating

@@ -170,10 +170,15 @@ a file-root or a nested heading) to its JSON alist form."
                                   (plist-get node :children))))))
 
 (defun k-agenda-protocol--reference-tree-payload ()
-  "Build the `referenceTree' array. Sent in full on every snapshot, same as
-`projects'/`tasks' (:119-121 above) -- reference docs are low-volume
-personal notes, and this reuses the existing snapshot-on-open plus
-debounced-broadcast-on-save machinery for free."
+  "Build the `referenceTree' array.
+
+Deliberately NOT part of the main snapshot (contrast `projects'/`tasks'
+above): building it opens and parses every file under
+`k-agenda-references-dir' (see `k-agenda-model-reference-tree'), which
+with 90+ reference docs was expensive enough to noticeably stall the app
+on every snapshot -- initial connect, and every debounced broadcast
+after ANY scoped edit, not just a reference-file one. Fetched on demand
+instead, via `k-agenda-protocol-encode-reference-tree'."
   (k-agenda-protocol--vec
    (mapcar #'k-agenda-protocol--reference-node-payload (k-agenda-model-reference-tree))))
 
@@ -185,8 +190,7 @@ debounced-broadcast-on-save machinery for free."
           (cons 'todoKeywords (k-agenda-protocol--todo-keywords-payload))
           (cons 'stats (k-agenda-protocol--stats-payload entries specs))
           (cons 'projects (k-agenda-protocol--projects-payload entries))
-          (cons 'tasks (k-agenda-protocol--tasks-payload entries))
-          (cons 'referenceTree (k-agenda-protocol--reference-tree-payload)))))
+          (cons 'tasks (k-agenda-protocol--tasks-payload entries)))))
 
 (defun k-agenda-protocol-encode-snapshot ()
   "Return the current snapshot as a JSON string, wrapped in the envelope."
@@ -205,6 +209,16 @@ heading that no longer exists)."
     (json-encode (list (cons 'type "task-body")
                         (cons 'id id)
                         (cons 'body (k-agenda-model-body-for-id id))))))
+
+(defun k-agenda-protocol-encode-reference-tree ()
+  "Return the References tree as a `reference-tree' response, JSON-encoded.
+Sent on request (when the browser opens the References page) and pushed
+again, unprompted, to every client after a reference file is edited --
+see `k-agenda-ws--on-message' and `k-agenda-ws--schedule-reference-broadcast'."
+  (let ((json-false :json-false)
+        (json-null nil))
+    (json-encode (list (cons 'type "reference-tree")
+                        (cons 'tree (k-agenda-protocol--reference-tree-payload))))))
 
 (defun k-agenda-protocol-encode-reference-body (id)
   "Look up ID's body (see `k-agenda-model-reference-body-for-id') and

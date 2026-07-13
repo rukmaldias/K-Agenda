@@ -16,8 +16,17 @@
 /* --- Tree panel --- */
 
 .k-ref-tree-panel {
-  overflow-y: auto;
+  /* react-resizable-panels sets an inline overflow:hidden on this same
+     element (to keep panel sizing stable during drags), which always beats
+     an external `overflow-y: auto` rule here. Scrolling instead happens on
+     `.k-ref-tree-scroll', an inner child div this element merely sizes. */
+  height: 100%;
   border-right: 1px solid var(--border);
+}
+
+.k-ref-tree-scroll {
+  height: 100%;
+  overflow-y: auto;
 }
 
 .k-ref-tree,
@@ -183,6 +192,11 @@
 /* --- Viewer panel --- */
 
 .k-ref-viewer-panel {
+  height: 100%;
+}
+
+.k-ref-viewer-scroll {
+  height: 100%;
   overflow-y: auto;
 }
 

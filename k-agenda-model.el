@@ -302,6 +302,18 @@ tab and a misconfigured directory look identical otherwise."
                dir k-agenda-references-dir))
       nil)))
 
+(defun k-agenda-model--with-file-visited (file thunk)
+  "Call THUNK with FILE's buffer current, then kill that buffer again if it
+wasn't already open before this call. Used for reference files, which are
+often opened purely to parse -- with the References dir holding upwards
+of 90 files, leaving every one of them as a live buffer after a single
+tree build would bloat the buffer list for the rest of the session."
+  (let* ((already-open (get-file-buffer file))
+         (buffer (find-file-noselect file)))
+    (unwind-protect
+        (with-current-buffer buffer (funcall thunk))
+      (unless already-open (kill-buffer buffer)))))
+
 (defun k-agenda-model--reference-flat-headings (file)
   "Flat list of heading plists (:id :title :level :tags) for FILE, in
 document order, via `org-map-entries' scoped to just that one file."
@@ -344,14 +356,16 @@ its capitalized basename, matching the same fallback
 `k-agenda-model--project-for-entry' uses for project files."
   (mapcar
    (lambda (file)
-     (with-current-buffer (find-file-noselect file)
-       (list :id file
-             :title (or (k-agenda-model--buffer-title)
-                        (k-agenda-model--file-fallback-project))
-             :level 0
-             :tags nil
-             :children (k-agenda-model--nest-headings
-                        (k-agenda-model--reference-flat-headings file)))))
+     (k-agenda-model--with-file-visited
+      file
+      (lambda ()
+        (list :id file
+              :title (or (k-agenda-model--buffer-title)
+                         (k-agenda-model--file-fallback-project))
+              :level 0
+              :tags nil
+              :children (k-agenda-model--nest-headings
+                         (k-agenda-model--reference-flat-headings file))))))
    (k-agenda-model-reference-files)))
 
 (defun k-agenda-model-reference-preamble (file)
@@ -366,14 +380,16 @@ There's no equivalent of `org-end-of-meta-data' for a file-level preamble,
 so a comment block below the keyword lines (as in the real study-plan
 files) is left as-is; anything left over just renders as plain text
 client-side (see web/src/lib/orgText.tsx)."
-  (with-current-buffer (find-file-noselect file)
-    (save-excursion
-      (goto-char (point-min))
-      (let* ((end (or (save-excursion (outline-next-heading) (point))
-                       (point-max)))
-             (text (buffer-substring-no-properties (point-min) end)))
-        (string-trim
-         (replace-regexp-in-string "\\`\\(?:[ \t]*#\\+[a-zA-Z_]+:.*\n?\\)+" "" text))))))
+  (k-agenda-model--with-file-visited
+   file
+   (lambda ()
+     (save-excursion
+       (goto-char (point-min))
+       (let* ((end (or (save-excursion (outline-next-heading) (point))
+                        (point-max)))
+              (text (buffer-substring-no-properties (point-min) end)))
+         (string-trim
+          (replace-regexp-in-string "\\`\\(?:[ \t]*#\\+[a-zA-Z_]+:.*\n?\\)+" "" text)))))))
 
 (defun k-agenda-model-reference-body-for-id (id)
   "Return the free-text body for ID, which may be a reference file's

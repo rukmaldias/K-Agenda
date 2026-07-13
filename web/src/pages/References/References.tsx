@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { useReferenceBody, useSnapshot } from "../../lib/ws";
+import { useReferenceBody, useReferenceTree } from "../../lib/ws";
 import { renderOrgText } from "../../lib/orgText";
 import type { ReferenceNode } from "../../types/snapshot";
 
@@ -89,8 +89,8 @@ function ReferenceTreeNode({ node, depth, expanded, onToggle, selectedId, onSele
 }
 
 export function References() {
-  const snapshot = useSnapshot();
-  const tree = useMemo(() => snapshot?.referenceTree ?? [], [snapshot]);
+  const treeRaw = useReferenceTree();
+  const tree = useMemo(() => treeRaw ?? [], [treeRaw]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -113,8 +113,8 @@ export function References() {
   const selectedTitle = useMemo(() => findTitle(tree, selectedId), [tree, selectedId]);
   const body = useReferenceBody(selectedId);
 
-  if (!snapshot) {
-    return <p className="k-ref-empty">Connecting…</p>;
+  if (treeRaw === undefined) {
+    return <p className="k-ref-empty">Loading references…</p>;
   }
 
   if (tree.length === 0) {
@@ -129,36 +129,40 @@ export function References() {
   return (
     <PanelGroup direction="horizontal" autoSaveId="k-references-split" className="k-ref-panels">
       <Panel defaultSize={30} minSize={18} className="k-ref-tree-panel">
-        <ul className="k-ref-tree k-ref-tree--root">
-          {tree.map((node) => (
-            <ReferenceTreeNode
-              key={node.id}
-              node={node}
-              depth={0}
-              expanded={expanded}
-              onToggle={toggle}
-              selectedId={selectedId}
-              onSelect={select}
-            />
-          ))}
-        </ul>
+        <div className="k-ref-tree-scroll">
+          <ul className="k-ref-tree k-ref-tree--root">
+            {tree.map((node) => (
+              <ReferenceTreeNode
+                key={node.id}
+                node={node}
+                depth={0}
+                expanded={expanded}
+                onToggle={toggle}
+                selectedId={selectedId}
+                onSelect={select}
+              />
+            ))}
+          </ul>
+        </div>
       </Panel>
       <PanelResizeHandle className="k-ref-resize-handle" />
       <Panel defaultSize={70} minSize={30} className="k-ref-viewer-panel">
-        {selectedId === null ? (
-          <p className="k-ref-empty">Select a document or section to read it here.</p>
-        ) : (
-          <article className="k-ref-viewer">
-            <h2 className="k-ref-viewer__title">{selectedTitle}</h2>
-            {body === undefined ? (
-              <p className="k-ref-empty">Loading…</p>
-            ) : body === null || body === "" ? (
-              <p className="k-ref-empty">No text here.</p>
-            ) : (
-              <div className="k-ref-viewer__body">{renderOrgText(body)}</div>
-            )}
-          </article>
-        )}
+        <div className="k-ref-viewer-scroll">
+          {selectedId === null ? (
+            <p className="k-ref-empty">Select a document or section to read it here.</p>
+          ) : (
+            <article className="k-ref-viewer">
+              <h2 className="k-ref-viewer__title">{selectedTitle}</h2>
+              {body === undefined ? (
+                <p className="k-ref-empty">Loading…</p>
+              ) : body === null || body === "" ? (
+                <p className="k-ref-empty">No text here.</p>
+              ) : (
+                <div className="k-ref-viewer__body">{renderOrgText(body)}</div>
+              )}
+            </article>
+          )}
+        </div>
       </Panel>
     </PanelGroup>
   );

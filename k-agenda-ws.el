@@ -26,8 +26,17 @@
 (defvar k-agenda-ws--debounce-timer nil
   "Pending debounce timer for the next broadcast, or nil.")
 
+(defvar k-agenda-ws--reference-debounce-timer nil
+  "Pending debounce timer for the next reference-tree broadcast, or nil.
+Kept separate from `k-agenda-ws--debounce-timer' since the two payloads
+are now built and sent independently -- see
+`k-agenda-protocol--reference-tree-payload'.")
+
 (defun k-agenda-ws--on-open (ws)
-  "Track WS and push it an immediate snapshot, without waiting for an edit."
+  "Track WS and push it an immediate snapshot, without waiting for an edit.
+The References tree is deliberately not included -- it's fetched
+separately, on request, only once the browser actually opens that page;
+see `k-agenda-protocol--reference-tree-payload'."
   (push ws k-agenda-ws--clients)
   (websocket-send-text ws (k-agenda-protocol-encode-snapshot)))
 
@@ -44,6 +53,11 @@ snapshot, so it's fetched on demand instead.
 
 `reference-body-request': the same on-demand fetch, for a References tree
 node instead of a task -- see `k-agenda-protocol-encode-reference-body'.
+
+`reference-tree-request': sent once, when the browser opens the
+References page -- the tree itself is fetched on demand for the same
+reason bodies are, just at a coarser grain; see
+`k-agenda-protocol-encode-reference-tree'.
 
 `change-state-request': sent when a K Board drag-and-drop is confirmed
 -- the only mutating request type. Re-validated server-side regardless
@@ -66,6 +80,8 @@ broadcast to others."
           (let ((id (cdr (assoc 'id payload))))
             (when id
               (websocket-send-text ws (k-agenda-protocol-encode-reference-body id)))))
+         ((equal type "reference-tree-request")
+          (websocket-send-text ws (k-agenda-protocol-encode-reference-tree)))
          ((equal type "change-state-request")
           (let ((request-id (cdr (assoc 'requestId payload)))
                 (id (cdr (assoc 'id payload)))
@@ -93,30 +109,60 @@ broadcast to others."
   (setq k-agenda-ws--debounce-timer
         (run-with-timer k-agenda-debounce-seconds nil #'k-agenda-ws--broadcast)))
 
-(defun k-agenda-ws--current-buffer-in-scope-p ()
-  "Non-nil when the current buffer visits one of `org-agenda-files' or one
-of `k-agenda-model-reference-files'.
+(defun k-agenda-ws--broadcast-reference-tree ()
+  "Push a fresh reference-tree message to every live client. Prunes closed
+sockets first, same as `k-agenda-ws--broadcast'."
+  (setq k-agenda-ws--reference-debounce-timer nil)
+  (setq k-agenda-ws--clients (cl-remove-if-not #'websocket-openp k-agenda-ws--clients))
+  (when k-agenda-ws--clients
+    (let ((payload (k-agenda-protocol-encode-reference-tree)))
+      (dolist (ws k-agenda-ws--clients)
+        (websocket-send-text ws payload)))))
+
+(defun k-agenda-ws--schedule-reference-broadcast ()
+  "Debounce and (re)schedule a reference-tree broadcast; coalesces bursts
+of edits to reference files. Separate from `k-agenda-ws-schedule-broadcast'
+so editing a reference file doesn't also force every client to re-fetch
+the full snapshot, and vice versa."
+  (when k-agenda-ws--reference-debounce-timer
+    (cancel-timer k-agenda-ws--reference-debounce-timer))
+  (setq k-agenda-ws--reference-debounce-timer
+        (run-with-timer k-agenda-debounce-seconds nil #'k-agenda-ws--broadcast-reference-tree)))
+
+(defun k-agenda-ws--current-buffer-agenda-p ()
+  "Non-nil when the current buffer visits one of `org-agenda-files'."
+  (let ((file (buffer-file-name)))
+    (and file
+         (cl-some (lambda (f) (k-agenda-model--file-name-equal-p (expand-file-name file) f))
+                  (k-agenda-model-agenda-files)))))
+
+(defun k-agenda-ws--current-buffer-reference-p ()
+  "Non-nil when the current buffer visits one of
+`k-agenda-model-reference-files'."
+  (let ((file (buffer-file-name)))
+    (and file
+         (cl-some (lambda (f) (k-agenda-model--file-name-equal-p (expand-file-name file) f))
+                  (k-agenda-model-reference-files)))))
+
+(defun k-agenda-ws--on-scoped-edit ()
+  "Route a save/state-change to the right debounced broadcast, or neither.
 
 Both sync hooks are global (`org-after-todo-state-change-hook',
 `after-save-hook'), so this guard is required -- the user edits other,
-non-agenda Org files too, and those edits must not trigger a broadcast.
-Reference files are included so editing a reference doc in Emacs
-live-updates the browser's References tree, the same as a project file."
-  (let ((file (buffer-file-name)))
-    (and file
-         (let ((expanded (expand-file-name file)))
-           (or (cl-some (lambda (f) (k-agenda-model--file-name-equal-p expanded f))
-                        (k-agenda-model-agenda-files))
-               (cl-some (lambda (f) (k-agenda-model--file-name-equal-p expanded f))
-                        (k-agenda-model-reference-files)))))))
+unrelated Org files too, and those edits must not trigger a broadcast.
+An agenda-file edit only rebuilds/resends the main snapshot; a
+reference-file edit only rebuilds/resends the References tree -- kept
+separate so the two never force-rebuild each other (see
+`k-agenda-protocol--reference-tree-payload' for why that used to matter)."
+  (cond
+   ((k-agenda-ws--current-buffer-agenda-p) (k-agenda-ws-schedule-broadcast))
+   ((k-agenda-ws--current-buffer-reference-p) (k-agenda-ws--schedule-reference-broadcast))))
 
 (defun k-agenda-ws--on-todo-state-change (&rest _)
-  (when (k-agenda-ws--current-buffer-in-scope-p)
-    (k-agenda-ws-schedule-broadcast)))
+  (k-agenda-ws--on-scoped-edit))
 
 (defun k-agenda-ws--on-after-save ()
-  (when (k-agenda-ws--current-buffer-in-scope-p)
-    (k-agenda-ws-schedule-broadcast)))
+  (k-agenda-ws--on-scoped-edit))
 
 (defun k-agenda-ws-start (port)
   "Start the websocket server on PORT and install the sync hooks."
@@ -136,14 +182,19 @@ live-updates the browser's References tree, the same as a project file."
   (when k-agenda-ws--debounce-timer
     (cancel-timer k-agenda-ws--debounce-timer)
     (setq k-agenda-ws--debounce-timer nil))
+  (when k-agenda-ws--reference-debounce-timer
+    (cancel-timer k-agenda-ws--reference-debounce-timer)
+    (setq k-agenda-ws--reference-debounce-timer nil))
   (when k-agenda-ws--server
     (websocket-server-close k-agenda-ws--server)
     (setq k-agenda-ws--server nil))
   (setq k-agenda-ws--clients nil))
 
 (defun k-agenda-ws-refresh ()
-  "Force an immediate (non-debounced) broadcast to all clients."
-  (k-agenda-ws--broadcast))
+  "Force an immediate (non-debounced) broadcast of the main snapshot and
+the References tree to all clients."
+  (k-agenda-ws--broadcast)
+  (k-agenda-ws--broadcast-reference-tree))
 
 (provide 'k-agenda-ws)
 ;;; k-agenda-ws.el ends here

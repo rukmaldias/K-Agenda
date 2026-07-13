@@ -2,6 +2,8 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type {
   ChangeStateResponse,
   ReferenceBodyMessage,
+  ReferenceNode,
+  ReferenceTreeMessage,
   SnapshotData,
   SnapshotMessage,
   TaskBodyMessage,
@@ -13,11 +15,15 @@ type IncomingMessage =
   | SnapshotMessage
   | TaskBodyMessage
   | ReferenceBodyMessage
+  | ReferenceTreeMessage
   | ChangeStateResponse;
 
 interface StoreState {
   status: ConnectionStatus;
   snapshot: SnapshotData | null;
+  // undefined: never fetched yet; null is not a valid state -- an empty
+  // References dir still resolves to `[]`, same as the snapshot arrays.
+  referenceTree: ReferenceNode[] | undefined;
 }
 
 // Always connects directly to the raw websocket port, never proxied
@@ -30,7 +36,7 @@ const WS_URL = `ws://${window.location.hostname || "localhost"}:${WS_PORT}`;
 const INITIAL_RETRY_MS = 500;
 const MAX_RETRY_MS = 10_000;
 
-let state: StoreState = { status: "connecting", snapshot: null };
+let state: StoreState = { status: "connecting", snapshot: null, referenceTree: undefined };
 let currentSocket: WebSocket | null = null;
 const listeners = new Set<() => void>();
 const messageListeners = new Set<(msg: IncomingMessage) => void>();
@@ -62,6 +68,8 @@ function connect(retryMs = INITIAL_RETRY_MS) {
       const message = JSON.parse(event.data) as IncomingMessage;
       if (message.type === "snapshot") {
         setState({ snapshot: message.data });
+      } else if (message.type === "reference-tree") {
+        setState({ referenceTree: message.tree });
       }
       messageListeners.forEach((l) => l(message));
     } catch {
@@ -151,6 +159,29 @@ export function useReferenceBody(id: string | null): string | null | undefined {
   }, [id]);
 
   return body;
+}
+
+/** Fetches the References tree lazily, once the caller actually mounts --
+ * not part of the main snapshot, since building it parses every reference
+ * file (expensive enough with 90+ docs to stall the app if it were sent
+ * on every connect/broadcast like `projects'/`tasks'). Cached globally so
+ * navigating away from and back to the References page doesn't re-fetch;
+ * the backend also pushes a fresh `reference-tree' message unprompted
+ * after a reference file is edited (see k-agenda-ws.el), which lands in
+ * the same store via the message listener below `connect()'. Re-requests
+ * on (re)connect so a dropped connection doesn't leave the tree stale.
+ * Returns undefined until the first response arrives. */
+export function useReferenceTree(): ReferenceNode[] | undefined {
+  const status = useConnectionStatus();
+  const tree = useSyncExternalStore(subscribe, () => getState().referenceTree);
+
+  useEffect(() => {
+    if (status === "open") {
+      sendMessage({ type: "reference-tree-request" });
+    }
+  }, [status]);
+
+  return tree;
 }
 
 const CHANGE_STATE_TIMEOUT_MS = 8000;
