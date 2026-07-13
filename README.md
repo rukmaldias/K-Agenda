@@ -128,6 +128,12 @@ A place for read-only supporting material — study notes, reading plans, anythi
 (setq k-agenda-references-dir "~/org/references/")
 ```
 
+**Windows caveat**: unlike macOS/Linux, Windows doesn't reliably set `HOME`, so `~` can expand somewhere other than your user profile (e.g. under `%APPDATA%`) — a directory that exists but silently isn't the one you meant, leaving the References tab empty with nothing in `*Messages*` to explain why. If the tab is empty on Windows, check `*Warnings*` first (a missing/misresolved `k-agenda-references-dir` is reported there), then set the path explicitly with forward slashes and the same drive-letter casing you use in `org-agenda-files`:
+
+```elisp
+(setq k-agenda-references-dir "C:/Users/<you>/Documents/Org/organizer/references/")
+```
+
 ## Read-only, except K Board
 
 Every screen is read-only — dragging is the one exception, and it's deliberately constrained. A drag is only allowed if it matches a real transition in the state graph below; anything else is blocked with an explanation before any request is even sent, and every allowed move still asks for confirmation first.
