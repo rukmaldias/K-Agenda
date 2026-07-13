@@ -294,6 +294,104 @@ applied, and nothing is written to disk."
         (insert-file-contents project)
         (should (string-match-p "^\\*\\* WAITING Some task" (buffer-string)))))))
 
+(defun k-agenda-test--call-with-references-dir (file-specs thunk)
+  "Like `k-agenda-test--call-with-project-dir' but binds
+`k-agenda-references-dir' to the temp directory instead of
+`org-agenda-files' -- reference files are deliberately never part of
+`org-agenda-files'."
+  (let* ((dir (k-agenda-test--make-project-dir file-specs))
+         (k-agenda-references-dir dir)
+         (org-todo-keywords k-agenda-test--todo-keywords)
+         (org-todo-keyword-faces nil))
+    (unwind-protect
+        (funcall thunk dir)
+      (k-agenda-test--cleanup-project-dir dir))))
+
+(ert-deftest k-agenda-test-reference-files-lists-only-the-references-dir ()
+  "`k-agenda-model-reference-files' reads only `k-agenda-references-dir',
+independent of `org-agenda-files' -- a reference doc's headings must
+never be scanned into tasks/projects."
+  (k-agenda-test--call-with-references-dir
+   '(("notes.org" . "* Some heading\n\nSome text.\n")
+     ("more.org" . "* Another heading\n"))
+   (lambda (_dir)
+     (should (= (length (k-agenda-model-reference-files)) 2)))))
+
+(ert-deftest k-agenda-test-nest-headings-attaches-to-nearest-shallower-ancestor ()
+  "A level jump (e.g. level 1 directly followed by level 3, which Org
+itself allows) attaches the deeper heading under the nearest preceding
+heading whose level is strictly less, not as a sibling of the level-1
+heading."
+  (let* ((flat (list (list :id "a" :title "A" :level 1 :tags nil)
+                      (list :id "b" :title "B" :level 3 :tags nil)
+                      (list :id "c" :title "C" :level 2 :tags nil)))
+         (tree (k-agenda-model--nest-headings flat)))
+    (should (= (length tree) 1))
+    (let* ((root (car tree))
+           (children (plist-get root :children)))
+      (should (equal (plist-get root :title) "A"))
+      (should (equal (mapcar (lambda (n) (plist-get n :title)) children) '("B" "C"))))))
+
+(ert-deftest k-agenda-test-reference-tree-nests-by-level ()
+  "A file's headings nest into a tree matching their Org outline levels."
+  (k-agenda-test--call-with-references-dir
+   '(("study.org" . "* Block 1\n\n** Quickstart\n\n** Tensors\n\n* Block 2\n"))
+   (lambda (_dir)
+     (let* ((tree (k-agenda-model-reference-tree))
+            (root (car tree))
+            (children (plist-get root :children)))
+       (should (= (length tree) 1))
+       (should (= (length children) 2))
+       (should (equal (plist-get (car children) :title) "Block 1"))
+       (should (= (length (plist-get (car children) :children)) 2))
+       (should (equal (plist-get (cadr children) :title) "Block 2"))
+       (should (= (length (plist-get (cadr children) :children)) 0))))))
+
+(ert-deftest k-agenda-test-reference-tree-root-title-prefers-hash-title-then-basename ()
+  "A reference file's root node uses `#+TITLE:' when present, else its
+capitalized basename -- the same fallback a project file's name uses."
+  (k-agenda-test--call-with-references-dir
+   '(("titled.org" . "#+TITLE: My Study Plan\n\n* Section\n")
+     ("untitled.org" . "* Section\n"))
+   (lambda (_dir)
+     (let* ((tree (k-agenda-model-reference-tree))
+            (titled (cl-find "titled.org" tree :key (lambda (n) (plist-get n :id)) :test #'string-suffix-p))
+            (untitled (cl-find "untitled.org" tree :key (lambda (n) (plist-get n :id)) :test #'string-suffix-p)))
+       (should (equal (plist-get titled :title) "My Study Plan"))
+       (should (equal (plist-get untitled :title) "Untitled"))))))
+
+(ert-deftest k-agenda-test-reference-preamble-strips-leading-keywords ()
+  "The file-root body strips a leading run of `#+KEYWORD:' lines but keeps
+the free text before the first heading."
+  (k-agenda-test--call-with-references-dir
+   '(("study.org" . "#+TITLE: Study\n#+AUTHOR: Me\n\nIntro text here.\n\n* Section\n\nSection text.\n"))
+   (lambda (_dir)
+     (let* ((file (car (k-agenda-model-reference-files)))
+            (preamble (k-agenda-model-reference-preamble file)))
+       (should (equal preamble "Intro text here."))))))
+
+(ert-deftest k-agenda-test-reference-body-for-id-file-root-and-heading ()
+  "`k-agenda-model-reference-body-for-id' resolves both a file-root id
+(-> the preamble) and a heading id (-> that heading's own free text,
+reusing `k-agenda-model--entry-body', stopping before a child heading)."
+  (k-agenda-test--call-with-references-dir
+   '(("study.org" . "Intro text.\n\n* Section\nSection's own text.\n\n** Sub\nSub's own text.\n"))
+   (lambda (_dir)
+     (let* ((file (car (k-agenda-model-reference-files)))
+            (tree (k-agenda-model-reference-tree))
+            (section-node (car (plist-get (car tree) :children)))
+            (section-id (plist-get section-node :id)))
+       (should (equal (k-agenda-model-reference-body-for-id file) "Intro text."))
+       (should (equal (k-agenda-model-reference-body-for-id section-id) "Section's own text."))))))
+
+(ert-deftest k-agenda-test-reference-body-for-id-nil-when-not-found ()
+  "An id that doesn't resolve to any current reference file or heading
+resolves to nil, not an error."
+  (k-agenda-test--call-with-references-dir
+   '(("study.org" . "* Section\n"))
+   (lambda (_dir)
+     (should (null (k-agenda-model-reference-body-for-id "not-a-real-id"))))))
+
 (ert-deftest k-agenda-test-change-state-not-found-for-unknown-id ()
   "An id that doesn't resolve to any current entry fails cleanly."
   (k-agenda-test-with-fixture-files

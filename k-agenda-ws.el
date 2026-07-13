@@ -42,6 +42,9 @@
 -- a full entry body isn't worth broadcasting for every task on every
 snapshot, so it's fetched on demand instead.
 
+`reference-body-request': the same on-demand fetch, for a References tree
+node instead of a task -- see `k-agenda-protocol-encode-reference-body'.
+
 `change-state-request': sent when a K Board drag-and-drop is confirmed
 -- the only mutating request type. Re-validated server-side regardless
 of what the client already checked (see
@@ -59,6 +62,10 @@ broadcast to others."
           (let ((id (cdr (assoc 'id payload))))
             (when id
               (websocket-send-text ws (k-agenda-protocol-encode-task-body id)))))
+         ((equal type "reference-body-request")
+          (let ((id (cdr (assoc 'id payload))))
+            (when id
+              (websocket-send-text ws (k-agenda-protocol-encode-reference-body id)))))
          ((equal type "change-state-request")
           (let ((request-id (cdr (assoc 'requestId payload)))
                 (id (cdr (assoc 'id payload)))
@@ -87,13 +94,19 @@ broadcast to others."
         (run-with-timer k-agenda-debounce-seconds nil #'k-agenda-ws--broadcast)))
 
 (defun k-agenda-ws--current-buffer-in-scope-p ()
-  "Non-nil when the current buffer visits one of `org-agenda-files'.
+  "Non-nil when the current buffer visits one of `org-agenda-files' or one
+of `k-agenda-model-reference-files'.
 
 Both sync hooks are global (`org-after-todo-state-change-hook',
 `after-save-hook'), so this guard is required -- the user edits other,
-non-agenda Org files too, and those edits must not trigger a broadcast."
+non-agenda Org files too, and those edits must not trigger a broadcast.
+Reference files are included so editing a reference doc in Emacs
+live-updates the browser's References tree, the same as a project file."
   (let ((file (buffer-file-name)))
-    (and file (member (expand-file-name file) (k-agenda-model-agenda-files)))))
+    (and file
+         (let ((expanded (expand-file-name file)))
+           (or (member expanded (k-agenda-model-agenda-files))
+               (member expanded (k-agenda-model-reference-files)))))))
 
 (defun k-agenda-ws--on-todo-state-change (&rest _)
   (when (k-agenda-ws--current-buffer-in-scope-p)

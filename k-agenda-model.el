@@ -9,6 +9,12 @@
 (require 'org)
 (require 'cl-lib)
 
+(defvar k-agenda-references-dir "~/Documents/Org/organizer/references/"
+  "Real defcustom lives in k-agenda.el (loaded after this file in the full
+package, per the require chain in k-agenda.el/k-agenda-ws.el); this forward
+declaration keeps k-agenda-model.el loadable and testable headless, with
+the same default, per this file's own header comment.")
+
 (defun k-agenda-model-agenda-files ()
   "Return `org-agenda-files' as absolute, expanded paths."
   (mapcar #'expand-file-name (org-agenda-files t)))
@@ -272,6 +278,109 @@ unfinished work."
     (let (result)
       (maphash (lambda (k v) (push (cons k v) result)) table)
       result)))
+
+(defun k-agenda-model-reference-files ()
+  "Absolute paths of every `.org' file directly inside
+`k-agenda-references-dir' (non-recursive, matching `org-agenda-file-regexp'
+-- the same rule Org itself uses to expand a directory entry).
+
+Entirely independent of `org-agenda-files': these files are never passed
+to `k-agenda-model-collect-entries', so a reference doc's headings can
+never leak into `tasks'/`projects'/`stats'."
+  (let ((dir (expand-file-name k-agenda-references-dir)))
+    (when (file-directory-p dir)
+      (directory-files dir t org-agenda-file-regexp))))
+
+(defun k-agenda-model--reference-flat-headings (file)
+  "Flat list of heading plists (:id :title :level :tags) for FILE, in
+document order, via `org-map-entries' scoped to just that one file."
+  (org-map-entries
+   (lambda ()
+     (list :id (k-agenda-model--entry-id)
+           :title (substring-no-properties (org-get-heading t t t t))
+           :level (org-outline-level)
+           :tags (org-get-tags nil t)))
+   nil (list file)))
+
+(defun k-agenda-model--nest-headings (flat)
+  "Nest FLAT (a list of heading plists with :level, in document order, as
+returned by `k-agenda-model--reference-flat-headings') into a tree: each
+node gains a `:children' list of nested nodes. Handles arbitrary level
+jumps (e.g. a level-1 heading directly followed by a level-3 one) the
+same way Org's own outline commands do -- a heading attaches under the
+nearest preceding heading whose level is strictly less than its own, or
+becomes a top-level root if none exists."
+  (let (roots stack)
+    (dolist (h flat)
+      (let ((node (append h (list :children nil))))
+        (while (and stack (>= (plist-get (car stack) :level) (plist-get node :level)))
+          (setq stack (cdr stack)))
+        (if stack
+            (let ((parent (car stack)))
+              (plist-put parent :children (append (plist-get parent :children) (list node))))
+          (push node roots))
+        (push node stack)))
+    (nreverse roots)))
+
+(defun k-agenda-model-reference-tree ()
+  "Build the References tree: one root node per file in
+`k-agenda-model-reference-files', each with `:children' nested by heading
+level (see `k-agenda-model--nest-headings').
+
+A root's `:id' is the file's absolute path -- already unique and stable,
+no hash needed. Its `:title' is the file's `#+TITLE:' if present, else
+its capitalized basename, matching the same fallback
+`k-agenda-model--project-for-entry' uses for project files."
+  (mapcar
+   (lambda (file)
+     (with-current-buffer (find-file-noselect file)
+       (list :id file
+             :title (or (k-agenda-model--buffer-title)
+                        (k-agenda-model--file-fallback-project))
+             :level 0
+             :tags nil
+             :children (k-agenda-model--nest-headings
+                        (k-agenda-model--reference-flat-headings file)))))
+   (k-agenda-model-reference-files)))
+
+(defun k-agenda-model-reference-preamble (file)
+  "Return FILE's free text before its first heading (or the whole file if
+it has none), with any leading run of `#+KEYWORD:' in-buffer-settings
+lines (TITLE, AUTHOR, STARTUP, ...) stripped, trimmed. This is a
+reference tree's file-root node's body when clicked directly -- the
+file's intro/notes-to-self text, analogous to `k-agenda-model--entry-body'
+for a heading.
+
+There's no equivalent of `org-end-of-meta-data' for a file-level preamble,
+so a comment block below the keyword lines (as in the real study-plan
+files) is left as-is; anything left over just renders as plain text
+client-side (see web/src/lib/orgText.tsx)."
+  (with-current-buffer (find-file-noselect file)
+    (save-excursion
+      (goto-char (point-min))
+      (let* ((end (or (save-excursion (outline-next-heading) (point))
+                       (point-max)))
+             (text (buffer-substring-no-properties (point-min) end)))
+        (string-trim
+         (replace-regexp-in-string "\\`\\(?:[ \t]*#\\+[a-zA-Z_]+:.*\n?\\)+" "" text))))))
+
+(defun k-agenda-model-reference-body-for-id (id)
+  "Return the free-text body for ID, which may be a reference file's
+absolute path (a tree root node -- see `k-agenda-model-reference-preamble')
+or a heading id within one of `k-agenda-model-reference-files' (see
+`k-agenda-model--entry-body'), re-resolved fresh each call exactly like
+`k-agenda-model-body-for-id'. Returns nil if ID doesn't resolve to
+anything current."
+  (let ((files (k-agenda-model-reference-files)))
+    (if (cl-some (lambda (f) (k-agenda-model--file-name-equal-p (expand-file-name id) f)) files)
+        (k-agenda-model-reference-preamble id)
+      (catch 'k-agenda-model-reference-body-found
+        (org-map-entries
+         (lambda ()
+           (when (equal (k-agenda-model--entry-id) id)
+             (throw 'k-agenda-model-reference-body-found (k-agenda-model--entry-body))))
+         nil files)
+        nil))))
 
 (provide 'k-agenda-model)
 ;;; k-agenda-model.el ends here

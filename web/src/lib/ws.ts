@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type {
   ChangeStateResponse,
+  ReferenceBodyMessage,
   SnapshotData,
   SnapshotMessage,
   TaskBodyMessage,
@@ -8,7 +9,11 @@ import type {
 
 export type ConnectionStatus = "connecting" | "open" | "closed";
 
-type IncomingMessage = SnapshotMessage | TaskBodyMessage | ChangeStateResponse;
+type IncomingMessage =
+  | SnapshotMessage
+  | TaskBodyMessage
+  | ReferenceBodyMessage
+  | ChangeStateResponse;
 
 interface StoreState {
   status: ConnectionStatus;
@@ -111,6 +116,35 @@ export function useTaskBody(id: string | null): string | null | undefined {
     };
     messageListeners.add(onMessage);
     sendMessage({ type: "task-body-request", id });
+    return () => {
+      messageListeners.delete(onMessage);
+    };
+  }, [id]);
+
+  return body;
+}
+
+/** Fetches a References tree node's full body text on demand when ID is
+ * non-null -- same on-demand-fetch pattern as `useTaskBody' above, applied
+ * to a `reference-body-request'/`reference-body' pair instead. Returns
+ * undefined while loading; null once resolved with no body / an id the
+ * backend couldn't find; otherwise the body text. */
+export function useReferenceBody(id: string | null): string | null | undefined {
+  const [body, setBody] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!id) {
+      setBody(undefined);
+      return;
+    }
+    setBody(undefined);
+    const onMessage = (msg: IncomingMessage) => {
+      if (msg.type === "reference-body" && msg.id === id) {
+        setBody(msg.body);
+      }
+    };
+    messageListeners.add(onMessage);
+    sendMessage({ type: "reference-body-request", id });
     return () => {
       messageListeners.delete(onMessage);
     };

@@ -8,6 +8,7 @@ import { Inbox } from "./pages/Inbox/Inbox";
 import { KBoard } from "./pages/Board/KBoard";
 import { Calendar } from "./pages/Calendar/Calendar";
 import { Roadmap } from "./pages/Roadmap/Roadmap";
+import { References } from "./pages/References/References";
 import { TaskDetailProvider } from "./state/taskDetail";
 import { TaskDetailModal } from "./components/TaskDetailModal";
 
@@ -77,6 +78,14 @@ function App() {
           element={
             <AppShell title="Roadmap">
               <Roadmap />
+            </AppShell>
+          }
+        />
+        <Route
+          path="/references"
+          element={
+            <AppShell title="References">
+              <References />
             </AppShell>
           }
         />

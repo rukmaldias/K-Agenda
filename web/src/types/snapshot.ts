@@ -43,12 +43,23 @@ export interface Task {
   effort: string | null;
 }
 
+// A node in the References tree: either a file root (`level` 0, `id` the
+// file's absolute path) or a heading nested under one, in document order.
+export interface ReferenceNode {
+  id: string;
+  title: string;
+  level: number;
+  tags: string[];
+  children: ReferenceNode[];
+}
+
 export interface SnapshotData {
   generatedAt: string;
   todoKeywords: TodoKeywordSpec[];
   stats: Stats;
   projects: ProjectProgress[];
   tasks: Task[];
+  referenceTree: ReferenceNode[];
 }
 
 export interface SnapshotMessage {
@@ -66,6 +77,20 @@ export interface TaskBodyRequest {
 
 export interface TaskBodyMessage {
   type: "task-body";
+  id: string;
+  body: string | null;
+}
+
+// Sent by the browser when the References reader pane selects a tree
+// node -- same on-demand-fetch reasoning as TaskBodyRequest above, applied
+// to a ReferenceNode instead of a Task.
+export interface ReferenceBodyRequest {
+  type: "reference-body-request";
+  id: string;
+}
+
+export interface ReferenceBodyMessage {
+  type: "reference-body";
   id: string;
   body: string | null;
 }

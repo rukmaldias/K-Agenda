@@ -43,5 +43,21 @@ parsing the output back and comparing, not just eyeballing bytes."
          (round-tripped (json-read-from-string (json-encode title))))
     (should (equal round-tripped title))))
 
+(ert-deftest k-agenda-test-reference-node-payload-nests-children-as-vectors ()
+  "Each reference tree node's `children' field is a JSON vector (even
+when empty), and nested children recurse the same shape."
+  (let* ((leaf (list :id "leaf-id" :title "Leaf" :level 2 :tags '("foo") :children nil))
+         (root (list :id "root-id" :title "Root" :level 1 :tags nil :children (list leaf)))
+         (payload (k-agenda-protocol--reference-node-payload root)))
+    (should (equal (cdr (assoc 'id payload)) "root-id"))
+    (should (vectorp (cdr (assoc 'children payload))))
+    (should (= (length (cdr (assoc 'children payload))) 1))
+    (let ((leaf-payload (aref (cdr (assoc 'children payload)) 0)))
+      (should (equal (cdr (assoc 'title leaf-payload)) "Leaf"))
+      (should (vectorp (cdr (assoc 'tags leaf-payload))))
+      (should (equal (aref (cdr (assoc 'tags leaf-payload)) 0) "foo"))
+      (should (vectorp (cdr (assoc 'children leaf-payload))))
+      (should (= (length (cdr (assoc 'children leaf-payload))) 0)))))
+
 (provide 'k-agenda-protocol-test)
 ;;; k-agenda-protocol-test.el ends here

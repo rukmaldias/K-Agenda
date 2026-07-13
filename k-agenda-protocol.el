@@ -158,6 +158,25 @@ null `todoState' so it's still visible as a typed, state-less item."
             (lambda (e) (or (plist-get e :todo-state) (k-agenda-protocol--type-for e)))
             entries))))
 
+(defun k-agenda-protocol--reference-node-payload (node)
+  "Recursively convert NODE (a `k-agenda-model-reference-tree' plist, either
+a file-root or a nested heading) to its JSON alist form."
+  (list (cons 'id (plist-get node :id))
+        (cons 'title (plist-get node :title))
+        (cons 'level (plist-get node :level))
+        (cons 'tags (k-agenda-protocol--vec (plist-get node :tags)))
+        (cons 'children (k-agenda-protocol--vec
+                          (mapcar #'k-agenda-protocol--reference-node-payload
+                                  (plist-get node :children))))))
+
+(defun k-agenda-protocol--reference-tree-payload ()
+  "Build the `referenceTree' array. Sent in full on every snapshot, same as
+`projects'/`tasks' (:119-121 above) -- reference docs are low-volume
+personal notes, and this reuses the existing snapshot-on-open plus
+debounced-broadcast-on-save machinery for free."
+  (k-agenda-protocol--vec
+   (mapcar #'k-agenda-protocol--reference-node-payload (k-agenda-model-reference-tree))))
+
 (defun k-agenda-protocol-build-snapshot ()
   "Collect the current Org state and build the full snapshot data object."
   (let* ((entries (k-agenda-model-collect-entries))
@@ -166,7 +185,8 @@ null `todoState' so it's still visible as a typed, state-less item."
           (cons 'todoKeywords (k-agenda-protocol--todo-keywords-payload))
           (cons 'stats (k-agenda-protocol--stats-payload entries specs))
           (cons 'projects (k-agenda-protocol--projects-payload entries))
-          (cons 'tasks (k-agenda-protocol--tasks-payload entries)))))
+          (cons 'tasks (k-agenda-protocol--tasks-payload entries))
+          (cons 'referenceTree (k-agenda-protocol--reference-tree-payload)))))
 
 (defun k-agenda-protocol-encode-snapshot ()
   "Return the current snapshot as a JSON string, wrapped in the envelope."
@@ -185,6 +205,16 @@ heading that no longer exists)."
     (json-encode (list (cons 'type "task-body")
                         (cons 'id id)
                         (cons 'body (k-agenda-model-body-for-id id))))))
+
+(defun k-agenda-protocol-encode-reference-body (id)
+  "Look up ID's body (see `k-agenda-model-reference-body-for-id') and
+return the `reference-body' response as a JSON string. `body' is null if
+ID doesn't resolve to any current reference file or heading."
+  (let ((json-false :json-false)
+        (json-null nil))
+    (json-encode (list (cons 'type "reference-body")
+                        (cons 'id id)
+                        (cons 'body (k-agenda-model-reference-body-for-id id))))))
 
 (defun k-agenda-protocol--change-state-response (request-id ok &optional reason message)
   "Build the `change-state-response' JSON string. REASON/MESSAGE are only

@@ -57,6 +57,14 @@ followed by a save) into a single websocket send."
   :type 'float
   :group 'k-agenda)
 
+(defcustom k-agenda-references-dir "~/Documents/Org/organizer/references/"
+  "Directory of read-only reference/notes `.org' files shown in the
+References tab. Deliberately independent of `org-agenda-files' -- these
+documents rarely have TODO keywords, so they must never be scanned into
+`tasks'/`projects'/`stats'; see `k-agenda-model-reference-files'."
+  :type 'directory
+  :group 'k-agenda)
+
 (defun k-agenda--url ()
   "Return the URL the dashboard is served at."
   (format "http://localhost:%d" k-agenda-http-port))

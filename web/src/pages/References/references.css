@@ -1,0 +1,254 @@
+.k-ref-panels {
+  height: calc(100svh - var(--header-height) - 64px);
+  min-height: 420px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+.k-ref-empty {
+  padding: 24px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* --- Tree panel --- */
+
+.k-ref-tree-panel {
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+
+.k-ref-tree,
+.k-ref-tree__children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.k-ref-tree--root {
+  padding: 8px 4px;
+}
+
+.k-ref-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: var(--radius-md);
+}
+
+/* :not() excludes the selected row structurally, rather than relying on a
+   specificity/order race against `.k-ref-tree__row--selected' below --
+   otherwise `:hover' (class + pseudo-class) outranks a bare class and wins,
+   reverting a selected+hovered row's background to near-white while its
+   white text color (no competing hover rule) still applies, making the
+   label invisible. */
+.k-ref-tree__row:not(.k-ref-tree__row--selected):hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-1));
+}
+
+.k-ref-tree__row--selected {
+  background: var(--accent);
+}
+
+.k-ref-tree__row--selected .k-ref-tree__title,
+.k-ref-tree__row--selected .k-ref-tree__toggle-icon {
+  color: #ffffff;
+}
+
+.k-ref-tree__toggle {
+  flex-shrink: 0;
+  width: 24px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  padding: 0;
+}
+
+.k-ref-tree__toggle:not(:disabled):hover {
+  background: var(--gridline);
+}
+
+.k-ref-tree__row--selected .k-ref-tree__toggle:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.k-ref-tree__toggle:disabled {
+  cursor: default;
+}
+
+/* A single glyph that rotates on expand, rather than swapping between two
+   Unicode triangles -- the swapped glyphs rendered inconsistently small on
+   some systems, reading as a barely-visible dot rather than an arrow. */
+.k-ref-tree__toggle-icon {
+  display: inline-block;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-primary);
+  transition: transform 0.15s ease;
+}
+
+.k-ref-tree__toggle-icon--expanded {
+  transform: rotate(90deg);
+}
+
+.k-ref-tree__title {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 6px 8px 6px 2px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.k-ref-tree__file-icon {
+  margin-right: 6px;
+}
+
+/* Small sticky-note swatch for non-root nodes, colored by nesting level
+   (folded top-right corner via the clipped ::after triangle). */
+.k-ref-tree__node-icon {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  margin-right: 7px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.k-ref-tree__node-icon::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 4px;
+  background: var(--surface-1);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+.k-ref-tree__row--selected .k-ref-tree__node-icon::after {
+  background: var(--accent);
+}
+
+.k-ref-tree__node-icon--level-1 {
+  color: #9333ea;
+}
+
+.k-ref-tree__node-icon--level-2 {
+  color: #16a34a;
+}
+
+.k-ref-tree__node-icon--level-3 {
+  color: #d97706;
+}
+
+/* --- Resize handle --- */
+
+.k-ref-resize-handle {
+  width: 5px;
+  background: transparent;
+  position: relative;
+}
+
+.k-ref-resize-handle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: 0 auto;
+  width: 1px;
+  background: var(--border);
+}
+
+.k-ref-resize-handle:hover::after,
+.k-ref-resize-handle[data-resize-handle-active]::after {
+  width: 3px;
+  background: var(--accent);
+}
+
+/* --- Viewer panel --- */
+
+.k-ref-viewer-panel {
+  overflow-y: auto;
+}
+
+.k-ref-viewer {
+  padding: 24px 28px;
+  max-width: 720px;
+}
+
+.k-ref-viewer__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 16px;
+}
+
+.k-ref-viewer__body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.k-org-para {
+  margin: 0 0 14px;
+}
+
+.k-org-para:last-child {
+  margin-bottom: 0;
+}
+
+.k-org-list {
+  margin: 0 0 14px;
+  padding-left: 22px;
+}
+
+.k-org-list .k-org-list {
+  margin: 4px 0;
+}
+
+.k-org-list li {
+  margin: 4px 0;
+}
+
+.k-org-code {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--page-plane);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.k-ref-viewer__body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--page-plane);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 0.9em;
+}
+
+.k-org-code code {
+  background: transparent;
+  padding: 0;
+}
+
+.k-ref-viewer__body a {
+  color: var(--accent);
+}

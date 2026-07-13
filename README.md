@@ -6,6 +6,7 @@ A web dashboard for `org-agenda`, in the spirit of [org-roam-ui](https://github.
 | -------------------------------------------------- | -------------------------------------------------- |
 | ![Dashboard](images/k-agenda-1.png)                | ![Project Hub](images/k-agenda-2.png)               |
 | ![K Board](images/k-agenda-3.png)                   | ![Calendar](images/k-agenda-4.png)                  |
+| ![Roadmap](images/k-agenda-5.png)                   | ![References](images/k-agenda-6.png)                |
 
 ## What it does
 
@@ -15,6 +16,8 @@ A web dashboard for `org-agenda`, in the spirit of [org-roam-ui](https://github.
 - **K Board** — a Kanban board per TODO state. The one screen that writes back to your Org files: drag a card to a new column to change its state, gated by a configurable transition graph (see [Read-only, except K Board](#read-only-except-k-board) below).
 - **My Agenda** — a 7-day strip navigator plus a table of the selected day's tasks.
 - **Calendar** — Month / Week / Day / List views of everything with a `SCHEDULED`/`DEADLINE` timestamp.
+- **Roadmap** — a per-project timeline: dated tasks grouped into phase cards along a month ruler, with a today-marker, a per-phase progress bar, and a milestone callout. See [Roadmap](#roadmap) below.
+- **References** — a separate, read-only library for supporting docs (study notes, reading plans, anything with no `TODO` keywords) that would otherwise clutter your task list: a collapsible outline tree on the left, the selected section's body — lightly formatted — on the right. See [References](#references) below.
 - **Task detail** — click any task anywhere to see its full body text (fetched on demand, not baked into every update), properties, and tags.
 - **Live sync** — a task's `TODO` state changes in the browser within a fraction of a second of you pressing `C-c C-t` in Emacs, before you've even saved the file.
 
@@ -59,6 +62,7 @@ All of these are `defcustom`s, so `M-x customize-group RET k-agenda RET` works t
 | `k-agenda-open-on-start` | `t` | Open a browser tab automatically when `k-agenda-mode` turns on |
 | `k-agenda-browser-function` | `#'browse-url` | Function used to open the dashboard URL |
 | `k-agenda-debounce-seconds` | `0.5` | Delay before pushing an update, to coalesce rapid successive edits |
+| `k-agenda-references-dir` | `~/Documents/Org/organizer/references/` | Directory of read-only reference `.org` files shown in References — see [References](#references) below |
 
 Commands: `k-agenda-mode` (toggle the backend on/off), `k-agenda-open` (ensure it's on, then open the browser), `k-agenda-refresh` (force an immediate re-push without waiting for an edit).
 
@@ -102,6 +106,27 @@ A heading with no `:CAPTURE_TYPE:` property just shows a blank Type badge — ne
 ### Estimated effort
 
 If a task has an `:Effort:` property (e.g. `4:00`), the Project Hub's effort chart picks it up automatically, grouped by each task's parent section heading.
+
+### Roadmap
+
+Pick a project from the dropdown and its dated tasks (anything with a `SCHEDULED` or `DEADLINE` timestamp) lay out as phase cards along a month timeline, with a live "today" marker. No extra config beyond dates:
+
+- **Phases** are just the heading directly under the project's level-1 root — e.g. a task under `* Project X / ** Phase 1 — Foundation / *** TODO Read the docs` groups into the "Phase 1 — Foundation" card. Generic on purpose: whatever your second-level headings are named becomes the phase name.
+- **Milestones** are any task whose title starts with "Milestone" or that's tagged `:milestone:` — it gets called out separately with its own countdown.
+- Undated tasks in the project still count toward its totals, they just don't appear on the timeline itself (shown as a small note instead).
+
+### References
+
+A place for read-only supporting material — study notes, reading plans, anything that's mostly prose and doesn't belong in your task list because it has no `TODO` keywords. If you drop a plain notes file into your `projects/` directory instead, it still shows up there as a project with zero tasks (harmless, but noisy); References keeps it out of the project/task pipeline entirely.
+
+- **File path**: `k-agenda-references-dir`, a `defcustom` like the others above — defaults to `~/Documents/Org/organizer/references/`. **Not** part of `org-agenda-files`; point it at any flat directory (non-recursive — subfolders aren't walked) and every `.org` file directly inside becomes a tree root.
+- **No TODO keywords needed.** Every heading in the file becomes a collapsible tree node regardless of state, nested by outline level. A file's `#+TITLE:` (or its capitalized filename, if there's no title) is the root node's label.
+- Click any node — the file root or any heading — to read its body text on the right, lightly formatted (bold/italic/underline, `#+begin_src` blocks, bullet lists, and links, including bare `https://` URLs, auto-linked). Drag the divider between the tree and the reader pane to resize; the split persists.
+- Edits to a reference file in Emacs live-update the tree the same way project files do — no manual refresh needed.
+
+```elisp
+(setq k-agenda-references-dir "~/org/references/")
+```
 
 ## Read-only, except K Board
 
