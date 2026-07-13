@@ -1,10 +1,10 @@
 // A small, deliberately bounded Org-markup-to-JSX renderer for reference
 // document bodies -- not a full Org parser. Handles: paragraphs, `-`/`+`/
-// numbered bullet lists (nested by indentation), `#+begin_src ... #+end_src`
-// blocks (verbatim, monospace), inline emphasis (*bold*, /italic/,
-// _underline_, =code=, ~verbatim~), [[url][desc]]/[[url]] links, and bare
-// http(s) URLs (auto-linked). Anything it doesn't recognize is shown as
-// plain text -- it never throws.
+// numbered bullet lists (nested by indentation), `#+begin_src ... #+end_src'
+// and `#+begin_example ... #+end_example' blocks (verbatim, monospace),
+// inline emphasis (*bold*, /italic/, _underline_, =code=, ~verbatim~),
+// [[url][desc]]/[[url]] links, and bare http(s) URLs (auto-linked).
+// Anything it doesn't recognize is shown as plain text -- it never throws.
 
 import type { ReactNode } from "react";
 
@@ -19,8 +19,11 @@ interface ListItem {
 }
 
 const LIST_LINE_RE = /^(\s*)(?:[-+]|\d+[.)])\s+(.*)$/;
-const BEGIN_SRC_RE = /^#\+begin_src\b/i;
-const END_SRC_RE = /^#\+end_src\s*$/i;
+// `example' is Org's other common verbatim block (typically used for
+// pasted output/session transcripts, where `src' would imply a language);
+// both render identically here -- a plain monospace block, no highlighting.
+const BEGIN_BLOCK_RE = /^#\+begin_(?:src|example)\b/i;
+const END_BLOCK_RE = /^#\+end_(?:src|example)\s*$/i;
 
 // Groups: 1=bare url, 2=link url, 3=link desc, 4=bold, 5=italic, 6=underline,
 // 7=code, 8=verbatim. The bare-url alternative comes first and is tried at
@@ -40,14 +43,24 @@ const END_SRC_RE = /^#\+end_src\s*$/i;
 // would pass a plain non-word-character check, since `*` isn't \w).
 const PRE = "(?<=^|[-\\s({'\"])";
 const POST = "(?=$|[-\\s.,;:!?'\")}\\]])";
+// =code=/~verbatim~ get a wider border that also accepts `/` -- prose
+// chaining two of them back to back, e.g. `=readString=/=writeString=`,
+// is common enough in these reference docs to be worth special-casing.
+// (Real Org doesn't special-case this either: it just greedily matches
+// the whole run as one verbatim span with the inner `=`/`/` shown
+// literally, which reads worse than two clean, separate code spans.)
+// Not extended to italic's `/` marker itself, which would misread plain
+// slash-separated prose/paths (e.g. "path/to/file") as italic spans.
+const PRE_CODE = "(?<=^|[-\\s({'\"/])";
+const POST_CODE = "(?=$|[-\\s.,;:!?'\")}\\]/])";
 const INLINE_RE = new RegExp(
   `(https?://[^\\s\\]]+[^\\s\\].,;:!?)}'"])` +
     `|\\[\\[([^\\]]+?)\\](?:\\[([^\\]]+?)\\])?\\]` +
     `|${PRE}\\*([^\\s*][^*]*?)\\*${POST}` +
     `|${PRE}/([^\\s/][^/]*?)/${POST}` +
     `|${PRE}_([^\\s_][^_]*?)_${POST}` +
-    `|${PRE}=([^\\s=][^=]*?)=${POST}` +
-    `|${PRE}~([^\\s~][^~]*?)~${POST}`,
+    `|${PRE_CODE}=([^\\s=][^=]*?)=${POST_CODE}` +
+    `|${PRE_CODE}~([^\\s~][^~]*?)~${POST_CODE}`,
   "g"
 );
 
@@ -79,12 +92,12 @@ function splitBlocks(text: string): Block[] {
       i++;
       continue;
     }
-    if (BEGIN_SRC_RE.test(line.trim())) {
+    if (BEGIN_BLOCK_RE.test(line.trim())) {
       const start = i + 1;
       i++;
-      while (i < lines.length && !END_SRC_RE.test(lines[i].trim())) i++;
+      while (i < lines.length && !END_BLOCK_RE.test(lines[i].trim())) i++;
       blocks.push({ type: "code", lines: lines.slice(start, i) });
-      if (i < lines.length) i++; // consume the #+end_src line
+      if (i < lines.length) i++; // consume the #+end_src/#+end_example line
       continue;
     }
     if (isListLine(line)) {
@@ -94,7 +107,7 @@ function splitBlocks(text: string): Block[] {
       continue;
     }
     const start = i;
-    while (i < lines.length && lines[i].trim() !== "" && !isListLine(lines[i]) && !BEGIN_SRC_RE.test(lines[i].trim())) {
+    while (i < lines.length && lines[i].trim() !== "" && !isListLine(lines[i]) && !BEGIN_BLOCK_RE.test(lines[i].trim())) {
       i++;
     }
     blocks.push({ type: "para", lines: lines.slice(start, i) });
