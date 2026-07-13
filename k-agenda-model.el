@@ -286,10 +286,21 @@ unfinished work."
 
 Entirely independent of `org-agenda-files': these files are never passed
 to `k-agenda-model-collect-entries', so a reference doc's headings can
-never leak into `tasks'/`projects'/`stats'."
+never leak into `tasks'/`projects'/`stats'.
+
+If `k-agenda-references-dir' doesn't resolve to a real directory (e.g.
+`~' expanding somewhere unexpected on Windows, where `HOME' isn't
+always set the way it is on Mac/Linux), this warns naming the resolved
+path instead of silently returning an empty tree -- an empty References
+tab and a misconfigured directory look identical otherwise."
   (let ((dir (expand-file-name k-agenda-references-dir)))
-    (when (file-directory-p dir)
-      (directory-files dir t org-agenda-file-regexp))))
+    (if (file-directory-p dir)
+        (directory-files dir t org-agenda-file-regexp)
+      (display-warning
+       'k-agenda
+       (format "k-agenda-references-dir resolved to %S, which is not a directory -- References tab will be empty. Check the value of k-agenda-references-dir (currently %S)."
+               dir k-agenda-references-dir))
+      nil)))
 
 (defun k-agenda-model--reference-flat-headings (file)
   "Flat list of heading plists (:id :title :level :tags) for FILE, in

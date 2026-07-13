@@ -317,6 +317,20 @@ never be scanned into tasks/projects."
    (lambda (_dir)
      (should (= (length (k-agenda-model-reference-files)) 2)))))
 
+(ert-deftest k-agenda-test-reference-files-warns-when-dir-missing ()
+  "Regression test: when `k-agenda-references-dir' doesn't resolve to a
+real directory (e.g. `~' expanding somewhere unexpected on Windows),
+`k-agenda-model-reference-files' must say so via `display-warning'
+instead of silently returning an empty list -- an empty References tab
+and a misconfigured directory looked identical otherwise, with nothing
+in *Messages* to explain why."
+  (let* ((k-agenda-references-dir "/definitely/does/not/exist/references/")
+         (warned nil))
+    (cl-letf (((symbol-function 'display-warning)
+               (lambda (&rest _) (setq warned t))))
+      (should (null (k-agenda-model-reference-files)))
+      (should warned))))
+
 (ert-deftest k-agenda-test-nest-headings-attaches-to-nearest-shallower-ancestor ()
   "A level jump (e.g. level 1 directly followed by level 3, which Org
 itself allows) attaches the deeper heading under the nearest preceding

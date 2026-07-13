@@ -105,8 +105,10 @@ live-updates the browser's References tree, the same as a project file."
   (let ((file (buffer-file-name)))
     (and file
          (let ((expanded (expand-file-name file)))
-           (or (member expanded (k-agenda-model-agenda-files))
-               (member expanded (k-agenda-model-reference-files)))))))
+           (or (cl-some (lambda (f) (k-agenda-model--file-name-equal-p expanded f))
+                        (k-agenda-model-agenda-files))
+               (cl-some (lambda (f) (k-agenda-model--file-name-equal-p expanded f))
+                        (k-agenda-model-reference-files)))))))
 
 (defun k-agenda-ws--on-todo-state-change (&rest _)
   (when (k-agenda-ws--current-buffer-in-scope-p)
