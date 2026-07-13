@@ -46,21 +46,31 @@ const POST = "(?=$|[-\\s.,;:!?'\")}\\]])";
 // =code=/~verbatim~ get a wider border that also accepts `/` -- prose
 // chaining two of them back to back, e.g. `=readString=/=writeString=`,
 // is common enough in these reference docs to be worth special-casing.
-// (Real Org doesn't special-case this either: it just greedily matches
-// the whole run as one verbatim span with the inner `=`/`/` shown
-// literally, which reads worse than two clean, separate code spans.)
 // Not extended to italic's `/` marker itself, which would misread plain
 // slash-separated prose/paths (e.g. "path/to/file") as italic spans.
 const PRE_CODE = "(?<=^|[-\\s({'\"/])";
 const POST_CODE = "(?=$|[-\\s.,;:!?'\")}\\]/])";
+// A closing =/~ is only accepted if it isn't itself immediately preceded by
+// a character that would make it read as part of a comparison operator --
+// `==`, `!=`, `<=`, `>=` -- rather than a genuine closing delimiter. This
+// matters because code snippets quoting one of those are common in these
+// reference docs (e.g. `=15 % 3 == 0=`, `=count >= 10=`): without it,
+// content matching (which otherwise allows any character, including `=`
+// itself, in the middle) stops at the first candidate `=` with a valid
+// border and leaves the rest dangling as literal text -- which is also
+// what Org's own parser does with `==` specifically (verified via
+// `org-export-as`), for the same reason. `~~` gets the same treatment for
+// symmetry, though it has no equivalent common doubled form in prose.
+const NOT_EQ_OPERATOR_LEAD = "(?<![=!<>])";
+const NOT_DOUBLED_TILDE = "(?<!~)";
 const INLINE_RE = new RegExp(
   `(https?://[^\\s\\]]+[^\\s\\].,;:!?)}'"])` +
     `|\\[\\[([^\\]]+?)\\](?:\\[([^\\]]+?)\\])?\\]` +
     `|${PRE}\\*([^\\s*][^*]*?)\\*${POST}` +
     `|${PRE}/([^\\s/][^/]*?)/${POST}` +
     `|${PRE}_([^\\s_][^_]*?)_${POST}` +
-    `|${PRE_CODE}=([^\\s=][^=]*?)=${POST_CODE}` +
-    `|${PRE_CODE}~([^\\s~][^~]*?)~${POST_CODE}`,
+    `|${PRE_CODE}=([^\\s=][\\s\\S]*?)${NOT_EQ_OPERATOR_LEAD}=${POST_CODE}` +
+    `|${PRE_CODE}~([^\\s~][\\s\\S]*?)${NOT_DOUBLED_TILDE}~${POST_CODE}`,
   "g"
 );
 
