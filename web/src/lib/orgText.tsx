@@ -1,15 +1,26 @@
 // A small, deliberately bounded Org-markup-to-JSX renderer for reference
 // document bodies -- not a full Org parser. Handles: paragraphs, `-`/`+`/
 // numbered bullet lists (nested by indentation), `#+begin_src ... #+end_src'
-// and `#+begin_example ... #+end_example' blocks (verbatim, monospace),
-// inline emphasis (*bold*, /italic/, _underline_, =code=, ~verbatim~),
-// [[url][desc]]/[[url]] links, and bare http(s) URLs (auto-linked).
-// Anything it doesn't recognize is shown as plain text -- it never throws.
+// (syntax-highlighted via Prism when the block names a language Prism
+// knows, e.g. `#+begin_src java') and `#+begin_example ... #+end_example'
+// (always plain -- Org uses this one for literal output/transcripts, not
+// code) blocks, inline emphasis (*bold*, /italic/, _underline_, =code=,
+// ~verbatim~), [[url][desc]]/[[url]] links, and bare http(s) URLs
+// (auto-linked). Anything it doesn't recognize is shown as plain text --
+// it never throws.
 
 import type { ReactNode } from "react";
+import Prism from "prismjs";
+// clike is a base grammar java/javascript extend -- must load before them.
+import "prismjs/components/prism-clike";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-sql";
 
 type Block =
-  | { type: "code"; lines: string[] }
+  | { type: "code"; lines: string[]; lang: string | null }
   | { type: "list"; lines: string[] }
   | { type: "para"; lines: string[] };
 
@@ -20,10 +31,40 @@ interface ListItem {
 
 const LIST_LINE_RE = /^(\s*)(?:[-+]|\d+[.)])\s+(.*)$/;
 // `example' is Org's other common verbatim block (typically used for
-// pasted output/session transcripts, where `src' would imply a language);
-// both render identically here -- a plain monospace block, no highlighting.
-const BEGIN_BLOCK_RE = /^#\+begin_(?:src|example)\b/i;
+// pasted output/session transcripts, where `src' would imply a language) --
+// unlike `src', it never gets language-based syntax highlighting below.
+const BEGIN_SRC_RE = /^#\+begin_src(?:\s+(\S+))?/i;
+const BEGIN_EXAMPLE_RE = /^#\+begin_example\b/i;
 const END_BLOCK_RE = /^#\+end_(?:src|example)\s*$/i;
+
+function isBlockStart(line: string): boolean {
+  return BEGIN_SRC_RE.test(line) || BEGIN_EXAMPLE_RE.test(line);
+}
+
+const HTML_ESCAPE_RE = /[&<>"']/g;
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+function escapeHtml(text: string): string {
+  return text.replace(HTML_ESCAPE_RE, (c) => HTML_ESCAPES[c]);
+}
+
+/** Syntax-highlights CODE as Prism-generated HTML (`<span class="token
+ * ...">`-wrapped, colored via the `.token.*` rules in references.css) when
+ * LANG names a grammar Prism has loaded above, else just HTML-escapes it
+ * verbatim. Prism escapes the source text itself while tokenizing, so this
+ * is safe to hand to `dangerouslySetInnerHTML' either way -- there's no
+ * unescaped user/file content reaching innerHTML on either path. */
+function highlightHtml(code: string, lang: string | null): string {
+  const grammar = lang ? Prism.languages[lang.toLowerCase()] : undefined;
+  if (!grammar) return escapeHtml(code);
+  return Prism.highlight(code, grammar, lang!.toLowerCase());
+}
 
 // Groups: 1=bare url, 2=link url, 3=link desc, 4=bold, 5=italic, 6=underline,
 // 7=code, 8=verbatim. The bare-url alternative comes first and is tried at
@@ -102,11 +143,13 @@ function splitBlocks(text: string): Block[] {
       i++;
       continue;
     }
-    if (BEGIN_BLOCK_RE.test(line.trim())) {
+    const srcMatch = line.trim().match(BEGIN_SRC_RE);
+    if (srcMatch || BEGIN_EXAMPLE_RE.test(line.trim())) {
+      const lang = srcMatch ? (srcMatch[1] ?? null) : null;
       const start = i + 1;
       i++;
       while (i < lines.length && !END_BLOCK_RE.test(lines[i].trim())) i++;
-      blocks.push({ type: "code", lines: lines.slice(start, i) });
+      blocks.push({ type: "code", lines: lines.slice(start, i), lang });
       if (i < lines.length) i++; // consume the #+end_src/#+end_example line
       continue;
     }
@@ -117,7 +160,7 @@ function splitBlocks(text: string): Block[] {
       continue;
     }
     const start = i;
-    while (i < lines.length && lines[i].trim() !== "" && !isListLine(lines[i]) && !BEGIN_BLOCK_RE.test(lines[i].trim())) {
+    while (i < lines.length && lines[i].trim() !== "" && !isListLine(lines[i]) && !isBlockStart(lines[i].trim())) {
       i++;
     }
     blocks.push({ type: "para", lines: lines.slice(start, i) });
@@ -209,9 +252,13 @@ function renderBlocks(text: string): ReactNode {
       {blocks.map((block, i) => {
         const key = `b${i}`;
         if (block.type === "code") {
+          const code = block.lines.join("\n");
           return (
             <pre key={key} className="k-org-code">
-              <code>{block.lines.join("\n")}</code>
+              <code
+                className={block.lang ? `language-${block.lang.toLowerCase()}` : undefined}
+                dangerouslySetInnerHTML={{ __html: highlightHtml(code, block.lang) }}
+              />
             </pre>
           );
         }

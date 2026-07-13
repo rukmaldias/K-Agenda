@@ -263,6 +263,70 @@
   padding: 0;
 }
 
+/* Prism token colors, scoped to reference code blocks only -- Prism.highlight
+   (see lib/orgText.tsx) produces these `.token.*' class names, but we skip
+   its stock themes (which ship their own hardcoded background/palette) in
+   favor of the app's own --syntax-* tokens, so a code block reads as part
+   of this app's light/dark theme rather than a bolted-on foreign one. */
+.k-org-code .token.keyword,
+.k-org-code .token.atrule,
+.k-org-code .token.attr-value {
+  color: var(--syntax-keyword);
+}
+
+.k-org-code .token.string,
+.k-org-code .token.char,
+.k-org-code .token.attr-name,
+.k-org-code .token.selector,
+.k-org-code .token.builtin,
+.k-org-code .token.inserted {
+  color: var(--syntax-string);
+}
+
+.k-org-code .token.number,
+.k-org-code .token.boolean,
+.k-org-code .token.constant,
+.k-org-code .token.property,
+.k-org-code .token.symbol {
+  color: var(--syntax-number);
+}
+
+.k-org-code .token.function {
+  color: var(--syntax-function);
+}
+
+.k-org-code .token.class-name {
+  color: var(--syntax-class);
+}
+
+.k-org-code .token.comment,
+.k-org-code .token.prolog,
+.k-org-code .token.doctype,
+.k-org-code .token.cdata {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+
+.k-org-code .token.regex,
+.k-org-code .token.important,
+.k-org-code .token.deleted {
+  color: var(--syntax-regex);
+}
+
+.k-org-code .token.operator,
+.k-org-code .token.punctuation {
+  color: var(--text-secondary);
+}
+
+.k-org-code .token.important,
+.k-org-code .token.bold {
+  font-weight: 700;
+}
+
+.k-org-code .token.italic {
+  font-style: italic;
+}
+
 .k-ref-viewer__body a {
   color: var(--accent);
 }
