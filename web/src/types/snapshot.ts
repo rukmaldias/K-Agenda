@@ -82,10 +82,15 @@ export interface TaskBodyMessage {
 
 // Sent by the browser when the References reader pane selects a tree
 // node -- same on-demand-fetch reasoning as TaskBodyRequest above, applied
-// to a ReferenceNode instead of a Task.
+// to a ReferenceNode instead of a Task. `file` is the id of the tree root
+// (a reference file's absolute path) that the selected node lives under --
+// the caller already knows it from the tree it just rendered, and passing
+// it lets the backend look up just that one file instead of scanning all
+// of them (expensive with 90+ reference docs).
 export interface ReferenceBodyRequest {
   type: "reference-body-request";
   id: string;
+  file: string;
 }
 
 export interface ReferenceBodyMessage {

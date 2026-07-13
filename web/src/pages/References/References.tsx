@@ -14,6 +14,20 @@ function findTitle(nodes: ReferenceNode[], id: string | null): string {
   return "";
 }
 
+function nodeContains(node: ReferenceNode, id: string): boolean {
+  return node.id === id || node.children.some((child) => nodeContains(child, id));
+}
+
+// A root's id is the reference file's own absolute path (see ReferenceNode),
+// so the root containing a selected node IS the file to ask the backend to
+// look in -- passed to useReferenceBody so it can skip scanning every other
+// reference file for a match.
+function findRootFile(nodes: ReferenceNode[], id: string | null): string | null {
+  if (id === null) return null;
+  const root = nodes.find((node) => nodeContains(node, id));
+  return root?.id ?? null;
+}
+
 interface TreeNodeProps {
   node: ReferenceNode;
   depth: number;
@@ -111,7 +125,8 @@ export function References() {
   };
 
   const selectedTitle = useMemo(() => findTitle(tree, selectedId), [tree, selectedId]);
-  const body = useReferenceBody(selectedId);
+  const selectedFile = useMemo(() => findRootFile(tree, selectedId), [tree, selectedId]);
+  const body = useReferenceBody(selectedId, selectedFile);
 
   if (treeRaw === undefined) {
     return <p className="k-ref-empty">Loading references…</p>;

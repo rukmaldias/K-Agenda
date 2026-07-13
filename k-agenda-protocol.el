@@ -220,15 +220,16 @@ see `k-agenda-ws--on-message' and `k-agenda-ws--schedule-reference-broadcast'."
     (json-encode (list (cons 'type "reference-tree")
                         (cons 'tree (k-agenda-protocol--reference-tree-payload))))))
 
-(defun k-agenda-protocol-encode-reference-body (id)
-  "Look up ID's body (see `k-agenda-model-reference-body-for-id') and
-return the `reference-body' response as a JSON string. `body' is null if
-ID doesn't resolve to any current reference file or heading."
+(defun k-agenda-protocol-encode-reference-body (id file)
+  "Look up ID's body within FILE (see `k-agenda-model-reference-body-for-id')
+and return the `reference-body' response as a JSON string. `body' is
+null if FILE isn't a known reference file, or ID doesn't resolve
+within it."
   (let ((json-false :json-false)
         (json-null nil))
     (json-encode (list (cons 'type "reference-body")
                         (cons 'id id)
-                        (cons 'body (k-agenda-model-reference-body-for-id id))))))
+                        (cons 'body (k-agenda-model-reference-body-for-id id file))))))
 
 (defun k-agenda-protocol--change-state-response (request-id ok &optional reason message)
   "Build the `change-state-response' JSON string. REASON/MESSAGE are only

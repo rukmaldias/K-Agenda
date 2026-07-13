@@ -391,23 +391,35 @@ client-side (see web/src/lib/orgText.tsx)."
          (string-trim
           (replace-regexp-in-string "\\`\\(?:[ \t]*#\\+[a-zA-Z_]+:.*\n?\\)+" "" text)))))))
 
-(defun k-agenda-model-reference-body-for-id (id)
-  "Return the free-text body for ID, which may be a reference file's
-absolute path (a tree root node -- see `k-agenda-model-reference-preamble')
-or a heading id within one of `k-agenda-model-reference-files' (see
+(defun k-agenda-model-reference-body-for-id (id file)
+  "Return the free-text body for ID, which lives somewhere in FILE (one of
+`k-agenda-model-reference-files').
+
+FILE lets the caller skip scanning every reference file just to find
+which one ID belongs to -- with 90+ of them, `org-map-entries' opening
+and walking every single one on every heading click (the caller already
+knows the file, from the tree it just rendered) was the app's next
+biggest stall after the tree-build itself (see
+`k-agenda-model-reference-tree').
+
+ID may be FILE itself (a tree root node -- see
+`k-agenda-model-reference-preamble') or a heading id within it (see
 `k-agenda-model--entry-body'), re-resolved fresh each call exactly like
-`k-agenda-model-body-for-id'. Returns nil if ID doesn't resolve to
-anything current."
-  (let ((files (k-agenda-model-reference-files)))
-    (if (cl-some (lambda (f) (k-agenda-model--file-name-equal-p (expand-file-name id) f)) files)
-        (k-agenda-model-reference-preamble id)
-      (catch 'k-agenda-model-reference-body-found
-        (org-map-entries
-         (lambda ()
-           (when (equal (k-agenda-model--entry-id) id)
-             (throw 'k-agenda-model-reference-body-found (k-agenda-model--entry-body))))
-         nil files)
-        nil))))
+`k-agenda-model-body-for-id'. Returns nil if FILE isn't a known
+reference file, or ID doesn't resolve within it."
+  (let ((resolved (cl-find-if
+                    (lambda (f) (k-agenda-model--file-name-equal-p (expand-file-name file) f))
+                    (k-agenda-model-reference-files))))
+    (when resolved
+      (if (k-agenda-model--file-name-equal-p (expand-file-name id) resolved)
+          (k-agenda-model-reference-preamble resolved)
+        (catch 'k-agenda-model-reference-body-found
+          (org-map-entries
+           (lambda ()
+             (when (equal (k-agenda-model--entry-id) id)
+               (throw 'k-agenda-model-reference-body-found (k-agenda-model--entry-body))))
+           nil (list resolved))
+          nil)))))
 
 (provide 'k-agenda-model)
 ;;; k-agenda-model.el ends here

@@ -134,14 +134,17 @@ export function useTaskBody(id: string | null): string | null | undefined {
 
 /** Fetches a References tree node's full body text on demand when ID is
  * non-null -- same on-demand-fetch pattern as `useTaskBody' above, applied
- * to a `reference-body-request'/`reference-body' pair instead. Returns
+ * to a `reference-body-request'/`reference-body' pair instead. FILE is the
+ * id of ID's tree root (a reference file's absolute path) -- passed along
+ * so the backend can look up just that one file instead of scanning all
+ * of them; the caller already has it from the tree it rendered. Returns
  * undefined while loading; null once resolved with no body / an id the
  * backend couldn't find; otherwise the body text. */
-export function useReferenceBody(id: string | null): string | null | undefined {
+export function useReferenceBody(id: string | null, file: string | null): string | null | undefined {
   const [body, setBody] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!id) {
+    if (!id || !file) {
       setBody(undefined);
       return;
     }
@@ -152,11 +155,11 @@ export function useReferenceBody(id: string | null): string | null | undefined {
       }
     };
     messageListeners.add(onMessage);
-    sendMessage({ type: "reference-body-request", id });
+    sendMessage({ type: "reference-body-request", id, file });
     return () => {
       messageListeners.delete(onMessage);
     };
-  }, [id]);
+  }, [id, file]);
 
   return body;
 }

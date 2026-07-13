@@ -53,6 +53,8 @@ snapshot, so it's fetched on demand instead.
 
 `reference-body-request': the same on-demand fetch, for a References tree
 node instead of a task -- see `k-agenda-protocol-encode-reference-body'.
+Carries a `file' alongside `id' so the lookup can be scoped to that one
+reference file instead of scanning all of them.
 
 `reference-tree-request': sent once, when the browser opens the
 References page -- the tree itself is fetched on demand for the same
@@ -77,9 +79,10 @@ broadcast to others."
             (when id
               (websocket-send-text ws (k-agenda-protocol-encode-task-body id)))))
          ((equal type "reference-body-request")
-          (let ((id (cdr (assoc 'id payload))))
-            (when id
-              (websocket-send-text ws (k-agenda-protocol-encode-reference-body id)))))
+          (let ((id (cdr (assoc 'id payload)))
+                (file (cdr (assoc 'file payload))))
+            (when (and id file)
+              (websocket-send-text ws (k-agenda-protocol-encode-reference-body id file)))))
          ((equal type "reference-tree-request")
           (websocket-send-text ws (k-agenda-protocol-encode-reference-tree)))
          ((equal type "change-state-request")

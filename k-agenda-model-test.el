@@ -387,7 +387,9 @@ the free text before the first heading."
 (ert-deftest k-agenda-test-reference-body-for-id-file-root-and-heading ()
   "`k-agenda-model-reference-body-for-id' resolves both a file-root id
 (-> the preamble) and a heading id (-> that heading's own free text,
-reusing `k-agenda-model--entry-body', stopping before a child heading)."
+reusing `k-agenda-model--entry-body', stopping before a child heading),
+given the file it lives in -- see `k-agenda-model-reference-tree' for why
+that's a required argument rather than searched for."
   (k-agenda-test--call-with-references-dir
    '(("study.org" . "Intro text.\n\n* Section\nSection's own text.\n\n** Sub\nSub's own text.\n"))
    (lambda (_dir)
@@ -395,16 +397,18 @@ reusing `k-agenda-model--entry-body', stopping before a child heading)."
             (tree (k-agenda-model-reference-tree))
             (section-node (car (plist-get (car tree) :children)))
             (section-id (plist-get section-node :id)))
-       (should (equal (k-agenda-model-reference-body-for-id file) "Intro text."))
-       (should (equal (k-agenda-model-reference-body-for-id section-id) "Section's own text."))))))
+       (should (equal (k-agenda-model-reference-body-for-id file file) "Intro text."))
+       (should (equal (k-agenda-model-reference-body-for-id section-id file) "Section's own text."))))))
 
 (ert-deftest k-agenda-test-reference-body-for-id-nil-when-not-found ()
-  "An id that doesn't resolve to any current reference file or heading
-resolves to nil, not an error."
+  "An id that doesn't resolve to any heading in the given file, or a file
+that isn't a known reference file, resolves to nil, not an error."
   (k-agenda-test--call-with-references-dir
    '(("study.org" . "* Section\n"))
    (lambda (_dir)
-     (should (null (k-agenda-model-reference-body-for-id "not-a-real-id"))))))
+     (let ((file (car (k-agenda-model-reference-files))))
+       (should (null (k-agenda-model-reference-body-for-id "not-a-real-id" file)))
+       (should (null (k-agenda-model-reference-body-for-id file "/not/a/reference/file.org")))))))
 
 (ert-deftest k-agenda-test-change-state-not-found-for-unknown-id ()
   "An id that doesn't resolve to any current entry fails cleanly."
