@@ -220,6 +220,7 @@
 
 .k-org-para {
   margin: 0 0 14px;
+  white-space: pre-wrap;
 }
 
 .k-org-para:last-child {

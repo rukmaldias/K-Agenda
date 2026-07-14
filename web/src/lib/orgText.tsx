@@ -270,7 +270,7 @@ function renderBlocks(text: string): ReactNode {
             {block.lines.map((l, li) => (
               <Fragment key={`${key}-l${li}`}>
                 {li > 0 && <br />}
-                {renderInline(l.trim(), `${key}-${li}`)}
+                {renderInline(l.trimEnd(), `${key}-${li}`)}
               </Fragment>
             ))}
           </p>
