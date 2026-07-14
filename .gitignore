@@ -2,6 +2,7 @@
 node_modules/
 out/
 web/dist/
+graphify-out/
 
 # Elisp
 *.elc
