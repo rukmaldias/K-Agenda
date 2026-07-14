@@ -9,7 +9,7 @@
 // (auto-linked). Anything it doesn't recognize is shown as plain text --
 // it never throws.
 
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import Prism from "prismjs";
 // clike is a base grammar java/javascript extend -- must load before them.
 import "prismjs/components/prism-clike";
@@ -265,10 +265,14 @@ function renderBlocks(text: string): ReactNode {
         if (block.type === "list") {
           return <div key={key}>{renderList(parseListLines(block.lines), key)}</div>;
         }
-        const joined = block.lines.map((l) => l.trim()).join(" ");
         return (
           <p key={key} className="k-org-para">
-            {renderInline(joined, key)}
+            {block.lines.map((l, li) => (
+              <Fragment key={`${key}-l${li}`}>
+                {li > 0 && <br />}
+                {renderInline(l.trim(), `${key}-${li}`)}
+              </Fragment>
+            ))}
           </p>
         );
       })}
