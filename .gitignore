@@ -15,5 +15,10 @@ graphify-out/
 # Editor / OS cruft
 .DS_Store
 
+# AI assistant config / local tooling
+.claude/
+.claudeignore
+CLAUDE.md
+
 # Logs
 *.log
