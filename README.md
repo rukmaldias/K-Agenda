@@ -13,7 +13,7 @@ A web dashboard for `org-agenda`, in the spirit of [org-roam-ui](https://github.
 - **Dashboard** — stat tiles per TODO state, a status pie chart, an upcoming-tasks table, and a top-projects progress panel.
 - **Projects** — one card per project, each linking to a **Project Hub**: progress bar, next milestone, an estimated-effort breakdown chart, and a filterable upcoming/overdue tasks table.
 - **Inbox** — every task across your agenda files, searchable and filterable by state, type, and project.
-- **K Board** — a Kanban board per TODO state. The one screen that writes back to your Org files: drag a card to a new column to change its state, gated by a configurable transition graph (see [Read-only, except K Board](#read-only-except-k-board) below).
+- **K Board** — a Kanban board per TODO state. The one screen that writes back to your Org files: drag a card to a new column to change its state, gated by an explicit transition graph and re-validated server-side (see [Read-only, except K Board](#read-only-except-k-board) below).
 - **My Agenda** — a 7-day strip navigator plus a table of the selected day's tasks.
 - **Calendar** — Month / Week / Day / List views of everything with a `SCHEDULED`/`DEADLINE` timestamp.
 - **Roadmap** — a per-project timeline: dated tasks grouped into phase cards along a month ruler, with a today-marker, a per-phase progress bar, and a milestone callout. See [Roadmap](#roadmap) below.
@@ -121,8 +121,9 @@ A place for read-only supporting material — study notes, reading plans, anythi
 
 - **File path**: `k-agenda-references-dir`, a `defcustom` like the others above — defaults to `~/Documents/Org/organizer/references/`. **Not** part of `org-agenda-files`; point it at any flat directory (non-recursive — subfolders aren't walked) and every `.org` file directly inside becomes a tree root.
 - **No TODO keywords needed.** Every heading in the file becomes a collapsible tree node regardless of state, nested by outline level. A file's `#+TITLE:` (or its capitalized filename, if there's no title) is the root node's label.
-- Click any node — the file root or any heading — to read its body text on the right, lightly formatted (bold/italic/underline, `#+begin_src` blocks, bullet lists, and links, including bare `https://` URLs, auto-linked). Drag the divider between the tree and the reader pane to resize; the split persists.
-- Edits to a reference file in Emacs live-update the tree the same way project files do — no manual refresh needed.
+- Click any node — the file root or any heading — to read its body text on the right, lightly formatted (bold/italic/underline, `#+begin_src` blocks, `|`-delimited tables, bullet lists, and links, including bare `https://` URLs, auto-linked). Drag the divider between the tree and the reader pane to resize; the split persists.
+- **Search** — the box above the tree narrows the list as you type, matching file names and document text in one pass. Files matching on name or `#+TITLE:` rank ahead of files matching only on content, and matching headings surface expanded in place, so a hit deep in a document lands you on the section rather than the top of the file. Clearing the box restores the full tree. Matching is case-insensitive and literal, so a query like `c++` or `*.org` searches for exactly that.
+- Edits to a reference file in Emacs live-update the tree the same way project files do — no manual refresh needed. Parsed files are cached against their mtime and size, so a save re-reads only the file you changed, and a search scans what's already in memory.
 
 ```elisp
 (setq k-agenda-references-dir "~/org/references/")
@@ -139,15 +140,16 @@ A place for read-only supporting material — study notes, reading plans, anythi
 Every screen is read-only — dragging is the one exception, and it's deliberately constrained. A drag is only allowed if it matches a real transition in the state graph below; anything else is blocked with an explanation before any request is even sent, and every allowed move still asks for confirmation first.
 
 ```
-                    ┌── MEETING (event, resolves to Completed/Cancelled only)
-                    │
-INACTIVE ──► TODO ──► NEXT ──► Completed
-                ▲       │
-                │       ▼
-                └── WAITING
-                        │
-                        ▼
-                   Cancelled
+  INACTIVE ──► TODO ──► NEXT ──► WAITING
+                 ▲        ▲          │
+                 │        └──────────┤
+                 └───────────────────┘
+
+  Completed ◄── TODO, NEXT, MEETING
+  Cancelled ◄── INACTIVE, TODO, NEXT, WAITING, MEETING
+
+  MEETING is an event, not a process: it never enters the flow above, and
+  only ever resolves to Completed or Cancelled.
 ```
 
 The transition table (and its rejection messages) lives in `k-agenda-workflow.el`, plain data if you want to adapt it to your own workflow. The server re-validates every request independently of the browser — a mutating action never trusts client-side checks alone — and refuses the write if the task's actual current state doesn't match what the browser believed it was dragging from, so a stale page can't silently mutate the wrong heading.
