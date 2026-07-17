@@ -61,6 +61,10 @@ References page -- the tree itself is fetched on demand for the same
 reason bodies are, just at a coarser grain; see
 `k-agenda-protocol-encode-reference-tree'.
 
+`reference-search-request': sent as the user types in the References
+search box (debounced client-side). Scans the cached corpus and returns
+the narrowed tree -- see `k-agenda-protocol-encode-reference-search'.
+
 `change-state-request': sent when a K Board drag-and-drop is confirmed
 -- the only mutating request type. Re-validated server-side regardless
 of what the client already checked (see
@@ -85,6 +89,13 @@ broadcast to others."
               (websocket-send-text ws (k-agenda-protocol-encode-reference-body id file)))))
          ((equal type "reference-tree-request")
           (websocket-send-text ws (k-agenda-protocol-encode-reference-tree)))
+         ((equal type "reference-search-request")
+          ;; No `when' guard on QUERY: a blank/absent query is meaningful
+          ;; here -- it's what the client sends when the box is cleared,
+          ;; and it returns the full unfiltered tree.
+          (websocket-send-text
+           ws (k-agenda-protocol-encode-reference-search
+               (or (cdr (assoc 'query payload)) ""))))
          ((equal type "change-state-request")
           (let ((request-id (cdr (assoc 'requestId payload)))
                 (id (cdr (assoc 'id payload)))

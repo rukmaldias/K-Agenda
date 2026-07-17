@@ -136,14 +136,52 @@ files returned by `k-agenda-model--agenda-files'."
         :capture-type (org-entry-get (point) "CAPTURE_TYPE")
         :effort (org-entry-get (point) "Effort")))
 
+(defun k-agenda-model--with-agenda-file-parsed (file thunk)
+  "Call THUNK with FILE's Org text current and widened, returning its value.
+
+Agenda files, unlike reference files, are the user's live working files,
+so this picks a source per file rather than always reading disk:
+
+- FILE already has a buffer: use it. It may hold unsaved edits, and the
+  web view must reflect them -- `org-after-todo-state-change-hook' can
+  fire a broadcast while a change is still unsaved.
+- FILE has no buffer: it cannot have unsaved edits, so disk IS the
+  current state, and `k-agenda-model--with-file-parsed' reads it without
+  `find-file-noselect'. That path was ~70% of the first snapshot's cost,
+  and left every agenda file open in the user's buffer list as a side
+  effect of merely loading the web UI.
+
+Ids stay consistent across both branches (see
+`k-agenda-model--entry-id', which hashes file+point): a file with no
+buffer parses byte-identical content whichever way it's read.
+
+READ-ONLY callers only. Anything that writes must go through a genuinely
+visited buffer -- see `k-agenda-model-change-state', where `save-buffer'
+in a temp buffer with `buffer-file-name' bound would write the parse
+scratch straight over the user's file."
+  (let ((buffer (get-file-buffer file)))
+    (if buffer
+        (with-current-buffer buffer
+          ;; `widen' matches what `org-map-entries' does for a file scope;
+          ;; without it a narrowed buffer would hide most of its entries.
+          ;; `save-excursion' keeps the user's point where they left it --
+          ;; this is their live buffer, not ours to move.
+          (save-excursion
+            (save-restriction
+              (widen)
+              (funcall thunk))))
+      (k-agenda-model--with-file-parsed file thunk))))
+
 (defun k-agenda-model-collect-entries ()
   "Walk every heading in `org-agenda-files' and return a list of entry plists.
 
 Every heading is visited, including ones with no TODO keyword (project
 anchors, prose headings) -- callers that only care about tasks should
 filter on `:todo-state' being non-nil."
-  (let ((files (k-agenda-model-agenda-files)))
-    (org-map-entries #'k-agenda-model--entry-plist nil files)))
+  (cl-loop for file in (k-agenda-model-agenda-files)
+           append (k-agenda-model--with-agenda-file-parsed
+                   file
+                   (lambda () (org-map-entries #'k-agenda-model--entry-plist)))))
 
 (defun k-agenda-model--entry-body ()
   "Free-text body of the entry at point: everything after the planning
@@ -152,32 +190,47 @@ line/property drawer/logbook, stopping before the first child heading
   (save-excursion
     (org-back-to-heading t)
     (org-end-of-meta-data t)
-    (let* ((start (point))
-           (end (save-excursion (or (outline-next-heading) (point-max))))
-           (text (buffer-substring-no-properties start end)))
-      ;; `org-end-of-meta-data' expects the planning line (DEADLINE/
-      ;; SCHEDULED/CLOSED) immediately after the heading, before any
-      ;; drawer -- some real files here have the property drawer first
-      ;; and the planning line after it, which it doesn't skip. Strip
-      ;; any leftover leading planning line(s) regardless of order.
-      (setq text (replace-regexp-in-string
-                  "\\`\\(?:[ \t]*\\(?:DEADLINE\\|SCHEDULED\\|CLOSED\\):.*\n?\\)+" "" text))
-      (string-trim text))))
+    ;; An entry with no body of its own leaves point ON the next heading
+    ;; here. Falling through would then measure from that heading to the
+    ;; one AFTER it (`outline-next-heading' always moves at least one
+    ;; heading forward), handing back the whole first child -- heading
+    ;; line and all -- as this entry's body.
+    (if (org-at-heading-p)
+        ""
+      (let* ((start (point))
+             (end (save-excursion (or (outline-next-heading) (point-max))))
+             (text (buffer-substring-no-properties start end)))
+        ;; `org-end-of-meta-data' expects the planning line (DEADLINE/
+        ;; SCHEDULED/CLOSED) immediately after the heading, before any
+        ;; drawer -- some real files here have the property drawer first
+        ;; and the planning line after it, which it doesn't skip. Strip
+        ;; any leftover leading planning line(s) regardless of order.
+        (setq text (replace-regexp-in-string
+                    "\\`\\(?:[ \t]*\\(?:DEADLINE\\|SCHEDULED\\|CLOSED\\):.*\n?\\)+" "" text))
+        (string-trim text)))))
 
 (defun k-agenda-model-body-for-id (id)
   "Return the free-text body of the entry whose id (see
 `k-agenda-model--entry-id') matches ID, re-resolved fresh against the
 current state of `org-agenda-files', or nil if no entry matches (a
 non-existent id, or a hash-based id gone stale after an intervening
-edit -- see `k-agenda-model--entry-id')."
-  (let ((files (k-agenda-model-agenda-files)))
-    (catch 'k-agenda-model-body-found
-      (org-map-entries
+edit -- see `k-agenda-model--entry-id').
+
+Reads each file the same way `k-agenda-model-collect-entries' does (see
+`k-agenda-model--with-agenda-file-parsed') -- it must, since the ids it
+resolves are the ones that snapshot minted: a file read live there and
+from disk here could hash the same heading to two different ids, and
+every lookup for an unsaved edit would miss."
+  (catch 'k-agenda-model-body-found
+    (dolist (file (k-agenda-model-agenda-files))
+      (k-agenda-model--with-agenda-file-parsed
+       file
        (lambda ()
-         (when (equal (k-agenda-model--entry-id) id)
-           (throw 'k-agenda-model-body-found (k-agenda-model--entry-body))))
-       nil files)
-      nil)))
+         (org-map-entries
+          (lambda ()
+            (when (equal (k-agenda-model--entry-id) id)
+              (throw 'k-agenda-model-body-found (k-agenda-model--entry-body))))))))
+    nil))
 
 (defun k-agenda-model-change-state (id from-state new-state)
   "Change the TODO state of the entry matching ID from FROM-STATE to
@@ -302,32 +355,41 @@ tab and a misconfigured directory look identical otherwise."
                dir k-agenda-references-dir))
       nil)))
 
-(defun k-agenda-model--with-file-visited (file thunk)
-  "Call THUNK with FILE's buffer current, then kill that buffer again if it
-wasn't already open before this call. Used for reference files, which are
-often opened purely to parse -- with the References dir holding upwards
-of 90 files, leaving every one of them as a live buffer after a single
-tree build would bloat the buffer list for the rest of the session."
-  (let* ((already-open (get-file-buffer file))
-         (buffer (find-file-noselect file)))
-    (unwind-protect
-        (with-current-buffer buffer (funcall thunk))
-      (unless already-open (kill-buffer buffer)))))
+(defun k-agenda-model--with-file-parsed (file thunk)
+  "Call THUNK with FILE's text in a current temp buffer in `org-mode', and
+return its value. FILE is never visited: it's read with
+`insert-file-contents' into a throwaway buffer, and `org-mode' is
+activated with `delay-mode-hooks'.
 
-(defun k-agenda-model--reference-flat-headings (file)
-  "Flat list of heading plists (:id :title :level :tags) for FILE, in
-document order, via `org-map-entries' scoped to just that one file."
-  (org-map-entries
-   (lambda ()
-     (list :id (k-agenda-model--entry-id)
-           :title (substring-no-properties (org-get-heading t t t t))
-           :level (org-outline-level)
-           :tags (org-get-tags nil t)))
-   nil (list file)))
+This deliberately bypasses `find-file-noselect', which was ~97% of the
+References tree-build cost -- with 52 files it dominated a >20s stall on
+first opening the tab. `find-file-noselect' runs the whole interactive
+visit-a-file path once per file: every `find-file-hook' (`vc-refresh-state'
+spawning a git subprocess, `undo-tree' loading a history file off disk,
+recentf, projectile...), every `org-mode-hook', plus font-lock. None of it
+means anything for a buffer we parse and immediately discard. Reading the
+same 52 files costs 0.03s; visiting them cost 4.5s+ (far more in a GUI
+session, where font-lock also fontifies all 52).
+
+`buffer-file-name' is bound because the parse helpers below legitimately
+depend on it: `k-agenda-model--entry-id' hashes it, and
+`k-agenda-model--file-fallback-project' derives a title from it. Binding
+it rather than setting it keeps the buffer unvisited, so no lock file,
+save prompt, or `buffer-list' entry outlives the call.
+
+Callers must parse the current buffer (`org-map-entries' with a nil
+SCOPE) -- passing a file SCOPE would send Org back through
+`org-get-agenda-file-buffer' and re-open the very file we just read."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (let ((buffer-file-name file)
+          (org-inhibit-startup t))
+      (delay-mode-hooks (org-mode))
+      (funcall thunk))))
 
 (defun k-agenda-model--nest-headings (flat)
   "Nest FLAT (a list of heading plists with :level, in document order, as
-returned by `k-agenda-model--reference-flat-headings') into a tree: each
+collected by `k-agenda-model--reference-parse') into a tree: each
 node gains a `:children' list of nested nodes. Handles arbitrary level
 jumps (e.g. a level-1 heading directly followed by a level-3 one) the
 same way Org's own outline commands do -- a heading attaches under the
@@ -345,6 +407,124 @@ becomes a top-level root if none exists."
         (push node stack)))
     (nreverse roots)))
 
+(defvar k-agenda-model--reference-cache (make-hash-table :test #'equal)
+  "Parsed reference files, keyed by absolute path.
+
+Each value is a plist (:stamp :node :text): `:stamp' is the file's
+(MTIME . SIZE) as of the parse, `:node' its tree root (see
+`k-agenda-model-reference-tree'), `:text' its raw Org source (the corpus
+`k-agenda-model-reference-search' scans).
+
+An entry is reused until FILE's mtime or size changes on disk, so the
+common rebuild -- an `after-save-hook' broadcast touching one file (see
+`k-agenda-ws--on-scoped-edit') -- re-parses only that file instead of all
+of them. No explicit invalidation call is needed anywhere: the stamp
+check IS the invalidation, which keeps this correct even when a file
+changes behind Emacs' back (a `git pull', an edit in another editor).")
+
+(defun k-agenda-model-reference-cache-clear ()
+  "Drop every cached reference parse, forcing a full re-parse next call.
+Nothing in normal operation needs this -- entries expire off their own
+file stamp (see `k-agenda-model--reference-cache'). It exists for tests,
+and as a manual escape hatch."
+  (interactive)
+  (clrhash k-agenda-model--reference-cache))
+
+(defun k-agenda-model--reference-file-stamp (file)
+  "FILE's (MTIME . SIZE), or nil if it can't be stat'd.
+Size is carried alongside mtime as cheap insurance: it costs nothing (the
+same `file-attributes' call supplies both) and catches an edit that lands
+inside the mtime resolution of a coarse filesystem."
+  (let ((attrs (file-attributes file)))
+    (when attrs
+      (cons (file-attribute-modification-time attrs)
+            (file-attribute-size attrs)))))
+
+(defun k-agenda-model--reference-stamp-equal-p (a b)
+  "Non-nil when stamps A and B (see `k-agenda-model--reference-file-stamp')
+denote the same mtime and size. Compares the time part with
+`time-equal-p' rather than `equal' -- Emacs has several interchangeable
+timestamp representations, and `equal' would report a spurious change
+when the same instant comes back in a different form."
+  (and a b
+       (time-equal-p (car a) (car b))
+       (= (cdr a) (cdr b))))
+
+(defun k-agenda-model--reference-parse (file)
+  "Parse FILE into a `k-agenda-model--reference-cache' value.
+
+Returns (:node :text :sections). `:sections' is the per-heading search
+index -- (:id :title :body) for every heading -- and is deliberately kept
+out of `:node': `:node' is what gets encoded and sent to the browser as
+the tree, and folding a heading's body into it would turn a ~50KB tree
+payload into the whole 0.66MB corpus on every tree request. Both come out
+of a single `org-map-entries' pass, since walking the file twice to
+collect the same headings would be pure waste."
+  (k-agenda-model--with-file-parsed
+   file
+   (lambda ()
+     (let* ((flat (org-map-entries
+                   (lambda ()
+                     (list :id (k-agenda-model--entry-id)
+                           :title (substring-no-properties (org-get-heading t t t t))
+                           :level (org-outline-level)
+                           :tags (org-get-tags nil t)
+                           :body (k-agenda-model--entry-body)))))
+            (sections (mapcar (lambda (h)
+                                (list :id (plist-get h :id)
+                                      :title (plist-get h :title)
+                                      :body (plist-get h :body)))
+                              flat))
+            ;; Strip :body before nesting -- `--nest-headings' builds the
+            ;; client-facing node, which must stay body-free.
+            (nodes (mapcar (lambda (h)
+                             (list :id (plist-get h :id)
+                                   :title (plist-get h :title)
+                                   :level (plist-get h :level)
+                                   :tags (plist-get h :tags)))
+                           flat)))
+       (list :node (list :id file
+                         :title (or (k-agenda-model--buffer-title)
+                                    (k-agenda-model--file-fallback-project))
+                         :level 0
+                         :tags nil
+                         :children (k-agenda-model--nest-headings nodes))
+             :text (buffer-substring-no-properties (point-min) (point-max))
+             :sections sections)))))
+
+(defun k-agenda-model--reference-entry (file)
+  "Cached (:stamp :node :text) for FILE, re-parsing only if it changed."
+  (let* ((stamp (k-agenda-model--reference-file-stamp file))
+         (cached (gethash file k-agenda-model--reference-cache)))
+    (if (and cached
+             (k-agenda-model--reference-stamp-equal-p stamp (plist-get cached :stamp)))
+        cached
+      (let ((entry (append (list :stamp stamp) (k-agenda-model--reference-parse file))))
+        (puthash file entry k-agenda-model--reference-cache)
+        entry))))
+
+(defun k-agenda-model--reference-cache-prune (files)
+  "Forget cached entries whose file is no longer in FILES.
+Without this a deleted or renamed reference doc would sit in the cache
+for the rest of the session -- harmless for the tree (which only reads
+entries for files it just listed) but not for
+`k-agenda-model-reference-search', which would go on returning hits from
+a file that no longer exists."
+  (let ((live (make-hash-table :test #'equal)))
+    (dolist (f files) (puthash f t live))
+    (maphash (lambda (file _entry)
+               (unless (gethash file live)
+                 (remhash file k-agenda-model--reference-cache)))
+             k-agenda-model--reference-cache)))
+
+(defun k-agenda-model--reference-entries ()
+  "Cache entries for every current reference file, in `directory-files' order.
+Parses whatever changed since the last call and prunes whatever vanished;
+this is the single point where the cache is brought up to date with disk."
+  (let ((files (k-agenda-model-reference-files)))
+    (k-agenda-model--reference-cache-prune files)
+    (mapcar #'k-agenda-model--reference-entry files)))
+
 (defun k-agenda-model-reference-tree ()
   "Build the References tree: one root node per file in
 `k-agenda-model-reference-files', each with `:children' nested by heading
@@ -353,20 +533,107 @@ level (see `k-agenda-model--nest-headings').
 A root's `:id' is the file's absolute path -- already unique and stable,
 no hash needed. Its `:title' is the file's `#+TITLE:' if present, else
 its capitalized basename, matching the same fallback
-`k-agenda-model--project-for-entry' uses for project files."
-  (mapcar
-   (lambda (file)
-     (k-agenda-model--with-file-visited
-      file
-      (lambda ()
-        (list :id file
-              :title (or (k-agenda-model--buffer-title)
-                         (k-agenda-model--file-fallback-project))
-              :level 0
-              :tags nil
-              :children (k-agenda-model--nest-headings
-                         (k-agenda-model--reference-flat-headings file))))))
-   (k-agenda-model-reference-files)))
+`k-agenda-model--project-for-entry' uses for project files.
+
+Served from `k-agenda-model--reference-cache', so this is near-free
+unless a file actually changed."
+  (mapcar (lambda (entry) (plist-get entry :node))
+          (k-agenda-model--reference-entries)))
+
+(defun k-agenda-model--prune-to-matches (nodes matched)
+  "Copy NODES, keeping only nodes in MATCHED (a hash of matching ids) and
+the ancestors that lead to them.
+
+Ancestors are kept even when they don't match themselves -- a match on
+`** Tensors' nested under a non-matching `* Block 1' must still render in
+its real outline position, not float to the file root. Ancestors kept
+purely as scaffolding are NOT flagged `:match', so the client can style
+the actual hits distinctly from the path to them."
+  (delq nil
+        (mapcar
+         (lambda (node)
+           (let* ((kids (k-agenda-model--prune-to-matches
+                          (plist-get node :children) matched))
+                  (hit (gethash (plist-get node :id) matched)))
+             (when (or hit kids)
+               (list :id (plist-get node :id)
+                     :title (plist-get node :title)
+                     :level (plist-get node :level)
+                     :tags (plist-get node :tags)
+                     :match (and hit t)
+                     :children kids))))
+         nodes)))
+
+(defun k-agenda-model-reference-search (query)
+  "Search every reference file for QUERY; return matching tree roots.
+
+QUERY is matched case-insensitively as a literal substring (not a regexp
+-- users type prose, and a stray `*' or `(' from a real query string
+would otherwise error or silently match the wrong thing). A blank QUERY
+returns the full tree, which is what makes clearing the box restore the
+unfiltered list.
+
+Results are ranked in two tiers, per the References UI's contract: files
+whose name or `#+TITLE:' matches come first, then files matching only on
+content. Within a tier, `directory-files' order (alphabetical) is
+preserved, so the list stays stable as the user types.
+
+A root's `:children' is pruned to just the headings that matched and the
+ancestors leading to them (see `k-agenda-model--prune-to-matches'), so
+the client can render results expanded and land the user on the relevant
+section. A file matching only by name reports no matching sections and so
+comes back with no children -- there's nothing to expand to.
+
+Scanning the whole 0.66MB corpus takes ~5ms, so there is deliberately no
+inverted index, no BM25, and no FTS: at this size a linear scan over the
+already-in-memory cache is faster than the machinery to avoid it."
+  (let ((trimmed (string-trim (or query ""))))
+    (if (string-empty-p trimmed)
+        (k-agenda-model-reference-tree)
+      (let ((needle (regexp-quote trimmed))
+            (case-fold-search t)
+            by-name by-content)
+        (dolist (entry (k-agenda-model--reference-entries))
+          (let* ((node (plist-get entry :node))
+                 (file (plist-get node :id))
+                 ;; Scanning the file's whole text first is a pre-filter for
+                 ;; the per-section work below, not just a preamble check.
+                 ;; Every section's title and body is a contiguous substring
+                 ;; of this text (`k-agenda-model--entry-body' only strips
+                 ;; from the front and trims), so text-hit nil PROVES no
+                 ;; section can match -- letting the ~85% of files that don't
+                 ;; match skip section scanning and tree pruning entirely.
+                 ;; Doing this in one pass over `:text' rather than 1016
+                 ;; passes over the sections took search from 39ms to ~7ms.
+                 (text-hit (string-match-p needle (plist-get entry :text)))
+                 ;; The basename is checked separately because it is NOT part
+                 ;; of the text -- a file called `cartoon.org' matches
+                 ;; "cartoon" even if the word never appears inside it.
+                 (name-hit (or (string-match-p needle (or (plist-get node :title) ""))
+                               (string-match-p needle (file-name-nondirectory file)))))
+            (when (or name-hit text-hit)
+              (let ((matched (make-hash-table :test #'equal)))
+                (when text-hit
+                  (dolist (section (plist-get entry :sections))
+                    (when (or (string-match-p needle (or (plist-get section :title) ""))
+                              (string-match-p needle (or (plist-get section :body) "")))
+                      (puthash (plist-get section :id) t matched))))
+                (let* ((kids (unless (zerop (hash-table-count matched))
+                               (k-agenda-model--prune-to-matches
+                                (plist-get node :children) matched)))
+                       (root (list :id file
+                                   :title (plist-get node :title)
+                                   :level 0
+                                   :tags nil
+                                   :match (and name-hit t)
+                                   :children kids)))
+                  ;; A hit that belongs to no section (a doc's preamble, or
+                  ;; its `#+TITLE:') still lists the file, just with nothing
+                  ;; to expand to -- `kids' is nil there.
+                  (if name-hit
+                      (push root by-name)
+                    (push root by-content)))))))
+        (append (nreverse by-name) (nreverse by-content))))))
 
 (defun k-agenda-model-reference-preamble (file)
   "Return FILE's free text before its first heading (or the whole file if
@@ -380,7 +647,7 @@ There's no equivalent of `org-end-of-meta-data' for a file-level preamble,
 so a comment block below the keyword lines (as in the real study-plan
 files) is left as-is; anything left over just renders as plain text
 client-side (see web/src/lib/orgText.tsx)."
-  (k-agenda-model--with-file-visited
+  (k-agenda-model--with-file-parsed
    file
    (lambda ()
      (save-excursion
@@ -413,13 +680,15 @@ reference file, or ID doesn't resolve within it."
     (when resolved
       (if (k-agenda-model--file-name-equal-p (expand-file-name id) resolved)
           (k-agenda-model-reference-preamble resolved)
-        (catch 'k-agenda-model-reference-body-found
-          (org-map-entries
-           (lambda ()
-             (when (equal (k-agenda-model--entry-id) id)
-               (throw 'k-agenda-model-reference-body-found (k-agenda-model--entry-body))))
-           nil (list resolved))
-          nil)))))
+        (k-agenda-model--with-file-parsed
+         resolved
+         (lambda ()
+           (catch 'k-agenda-model-reference-body-found
+             (org-map-entries
+              (lambda ()
+                (when (equal (k-agenda-model--entry-id) id)
+                  (throw 'k-agenda-model-reference-body-found (k-agenda-model--entry-body)))))
+             nil)))))))
 
 (provide 'k-agenda-model)
 ;;; k-agenda-model.el ends here

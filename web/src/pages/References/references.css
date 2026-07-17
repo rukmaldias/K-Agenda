@@ -22,11 +22,86 @@
      `.k-ref-tree-scroll', an inner child div this element merely sizes. */
   height: 100%;
   border-right: 1px solid var(--border);
+  /* Column layout so the search box stays put and only the list below it
+     scrolls -- the two children must share this height, not each claim it. */
+  display: flex;
+  flex-direction: column;
 }
 
 .k-ref-tree-scroll {
-  height: 100%;
+  /* `min-height: 0' is what actually allows this to shrink and scroll: a
+     flex item's default `min-height: auto' floors it at content height, so
+     without it a long list would push the panel taller instead. */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+}
+
+/* --- Search --- */
+
+.k-ref-search {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.k-ref-search__icon {
+  font-size: 12px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.k-ref-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--page-plane);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 6px 8px;
+  font-family: inherit;
+}
+
+.k-ref-search__input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.k-ref-search__input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Safari renders its own clear button on type=search; ours is styled and
+   keyboard-labelled, so suppress the native one rather than showing both. */
+.k-ref-search__input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.k-ref-search__clear {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: var(--radius-md);
+}
+
+.k-ref-search__clear:hover {
+  background: var(--gridline);
+  color: var(--text-primary);
+}
+
+/* A node the query actually hit, as opposed to an ancestor carried along
+   to position it in the outline. */
+.k-ref-tree__title--match {
+  font-weight: 600;
 }
 
 .k-ref-tree,
@@ -238,6 +313,34 @@
 
 .k-org-list li {
   margin: 4px 0;
+}
+
+/* The wrapper, not the table, carries the horizontal scroll: a wide table
+   must scroll within itself rather than widening the viewer pane. */
+.k-org-table-wrap {
+  margin: 0 0 14px;
+  overflow-x: auto;
+}
+
+.k-org-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.k-org-table th,
+.k-org-table td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.k-org-table th {
+  background: var(--page-plane);
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .k-org-code {
