@@ -4,7 +4,7 @@
 // (syntax-highlighted via Prism when the block names a language Prism
 // knows, e.g. `#+begin_src java') and `#+begin_example ... #+end_example'
 // (always plain -- Org uses this one for literal output/transcripts, not
-// code) blocks, inline emphasis (*bold*, /italic/, _underline_, =code=,
+// code) blocks, `|'-delimited tables, inline emphasis (*bold*, /italic/, _underline_, =code=,
 // ~verbatim~), [[url][desc]]/[[url]] links, and bare http(s) URLs
 // (auto-linked). Anything it doesn't recognize is shown as plain text --
 // it never throws.
@@ -22,6 +22,7 @@ import "prismjs/components/prism-sql";
 type Block =
   | { type: "code"; lines: string[]; lang: string | null }
   | { type: "list"; lines: string[] }
+  | { type: "table"; lines: string[] }
   | { type: "para"; lines: string[] };
 
 interface ListItem {
@@ -119,6 +120,42 @@ function isListLine(line: string): boolean {
   return LIST_LINE_RE.test(line);
 }
 
+// An Org table line is any line whose first non-blank character is `|'. A
+// rule line (`|---+---|', or the `|--|' Org writes when a column has no
+// name) holds no data: it only marks where the header stops, so it's used
+// as a separator below and never emitted as a row.
+const TABLE_LINE_RE = /^\s*\|/;
+const TABLE_RULE_RE = /^\s*\|[-+|\s]*$/;
+
+function isTableLine(line: string): boolean {
+  return TABLE_LINE_RE.test(line);
+}
+
+/** Splits one Org table row into its cell texts. Org rows are written
+ * `| a | b |' -- the outer pipes are delimiters rather than empty cells, so
+ * the empty leading/trailing fields the split produces get dropped. */
+function parseRow(line: string): string[] {
+  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return trimmed.split("|").map((c) => c.trim());
+}
+
+/** Splits TABLE lines into a header row plus body rows. Org marks the header
+ * with the first rule line: everything above it is the header, everything
+ * below is data. A table with no rule (or one whose rule sits at the very
+ * top, i.e. nothing above it) is all body and gets no header. Only the first
+ * pre-rule row becomes the header -- Org allows multi-line headers, but they
+ * don't appear in these docs and a single <thead> row keeps the markup
+ * simple. Later rules are just visual grouping and are dropped. */
+function parseTable(lines: string[]): { header: string[] | null; rows: string[][] } {
+  const ruleAt = lines.findIndex((l) => TABLE_RULE_RE.test(l));
+  const hasHeader = ruleAt > 0;
+  const header = hasHeader ? parseRow(lines[0]) : null;
+  const bodyLines = (hasHeader ? lines.slice(ruleAt + 1) : lines).filter(
+    (l) => !TABLE_RULE_RE.test(l)
+  );
+  return { header, rows: bodyLines.map(parseRow) };
+}
+
 /** Strips the common leading whitespace shared by every non-blank line, so
  * body text captured verbatim from an indented Org buffer (aligned under
  * nested headings) renders flush rather than carrying that indentation
@@ -153,6 +190,12 @@ function splitBlocks(text: string): Block[] {
       if (i < lines.length) i++; // consume the #+end_src/#+end_example line
       continue;
     }
+    if (isTableLine(line)) {
+      const start = i;
+      while (i < lines.length && isTableLine(lines[i])) i++;
+      blocks.push({ type: "table", lines: lines.slice(start, i) });
+      continue;
+    }
     if (isListLine(line)) {
       const start = i;
       while (i < lines.length && isListLine(lines[i])) i++;
@@ -160,7 +203,13 @@ function splitBlocks(text: string): Block[] {
       continue;
     }
     const start = i;
-    while (i < lines.length && lines[i].trim() !== "" && !isListLine(lines[i]) && !isBlockStart(lines[i].trim())) {
+    while (
+      i < lines.length &&
+      lines[i].trim() !== "" &&
+      !isListLine(lines[i]) &&
+      !isTableLine(lines[i]) &&
+      !isBlockStart(lines[i].trim())
+    ) {
       i++;
     }
     blocks.push({ type: "para", lines: lines.slice(start, i) });
@@ -264,6 +313,35 @@ function renderBlocks(text: string): ReactNode {
         }
         if (block.type === "list") {
           return <div key={key}>{renderList(parseListLines(block.lines), key)}</div>;
+        }
+        if (block.type === "table") {
+          const { header, rows } = parseTable(block.lines);
+          return (
+            <div key={key} className="k-org-table-wrap">
+              <table className="k-org-table">
+                {header && (
+                  <thead>
+                    <tr>
+                      {header.map((cell, ci) => (
+                        <th key={`${key}-h${ci}`}>{renderInline(cell, `${key}-h${ci}`)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                )}
+                <tbody>
+                  {rows.map((row, ri) => (
+                    <tr key={`${key}-r${ri}`}>
+                      {row.map((cell, ci) => (
+                        <td key={`${key}-r${ri}c${ci}`}>
+                          {renderInline(cell, `${key}-r${ri}c${ci}`)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
         }
         return (
           <p key={key} className="k-org-para">

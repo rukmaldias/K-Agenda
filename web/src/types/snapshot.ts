@@ -50,6 +50,10 @@ export interface ReferenceNode {
   title: string;
   level: number;
   tags: string[];
+  // True only for a node the query actually hit, in a `reference-search'
+  // result. An ancestor carried along to position a hit in the outline is
+  // false, as is every node of an unfiltered `reference-tree'.
+  match: boolean;
   children: ReferenceNode[];
 }
 
@@ -111,6 +115,24 @@ export interface ReferenceTreeRequest {
 
 export interface ReferenceTreeMessage {
   type: "reference-tree";
+  tree: ReferenceNode[];
+}
+
+// Sent as the user types in the References search box (debounced
+// client-side). The backend scans its cached corpus -- name/#+TITLE and
+// full text -- and returns the narrowed tree; a blank query returns the
+// full tree, which is how clearing the box restores the list.
+export interface ReferenceSearchRequest {
+  type: "reference-search-request";
+  query: string;
+}
+
+// `query' is echoed back so a stale reply can be discarded: these are
+// fired per keystroke, and a slow reply for "car" must not overwrite the
+// results for "cartoon" the user is already looking at.
+export interface ReferenceSearchMessage {
+  type: "reference-search";
+  query: string;
   tree: ReferenceNode[];
 }
 

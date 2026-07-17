@@ -418,5 +418,219 @@ that isn't a known reference file, resolves to nil, not an error."
       (should-not (plist-get result :ok))
       (should (equal (plist-get result :reason) "not-found")))))
 
+(ert-deftest k-agenda-test-reference-cache-reuses-unchanged-files ()
+  "A rebuild re-parses only files whose stamp changed, and picks up the
+edit. The untouched file's entry must come back as the very same object
+(`eq'), which is what proves it was served from cache rather than
+re-parsed into an equal-looking copy."
+  (k-agenda-test--call-with-references-dir
+   '(("alpha.org" . "#+TITLE: Alpha\n\n* One\n* Two\n")
+     ("beta.org" . "#+TITLE: Beta\n\n* Three\n"))
+   (lambda (dir)
+     (k-agenda-model-reference-cache-clear)
+     (k-agenda-model-reference-tree)
+     (let* ((alpha (expand-file-name "alpha.org" dir))
+            (beta (expand-file-name "beta.org" dir))
+            (alpha-before (gethash alpha k-agenda-model--reference-cache))
+            (beta-before (gethash beta k-agenda-model--reference-cache)))
+       ;; Ensure the rewrite lands on a distinguishable stamp even where
+       ;; mtime resolution is coarse -- the point under test is cache
+       ;; invalidation, not the filesystem's clock.
+       (sleep-for 0.01)
+       (with-temp-file alpha (insert "#+TITLE: Alpha Edited\n\n* One\n* Two\n* Three\n"))
+       (k-agenda-model-reference-tree)
+       (let ((alpha-after (gethash alpha k-agenda-model--reference-cache))
+             (beta-after (gethash beta k-agenda-model--reference-cache)))
+         (should-not (eq alpha-before alpha-after))
+         (should (eq beta-before beta-after))
+         (should (equal (plist-get (plist-get alpha-after :node) :title) "Alpha Edited"))
+         (should (= (length (plist-get (plist-get alpha-after :node) :children)) 3)))))))
+
+(ert-deftest k-agenda-test-reference-cache-prunes-deleted-files ()
+  "A deleted reference file leaves no entry behind -- otherwise its text
+would keep matching searches after the file is gone."
+  (k-agenda-test--call-with-references-dir
+   '(("alpha.org" . "#+TITLE: Alpha\n\n* One\n")
+     ("beta.org" . "#+TITLE: Beta\n\n* Two\n"))
+   (lambda (dir)
+     (k-agenda-model-reference-cache-clear)
+     (k-agenda-model-reference-tree)
+     (let ((beta (expand-file-name "beta.org" dir)))
+       (should (gethash beta k-agenda-model--reference-cache))
+       (delete-file beta)
+       (should (= (length (k-agenda-model-reference-tree)) 1))
+       (should-not (gethash beta k-agenda-model--reference-cache))))))
+
+(ert-deftest k-agenda-test-reference-cache-stores-file-text ()
+  "Each entry carries its file's raw Org source -- the corpus reference
+search scans."
+  (k-agenda-test--call-with-references-dir
+   '(("alpha.org" . "#+TITLE: Alpha\n\n* One\nbody text here\n"))
+   (lambda (dir)
+     (k-agenda-model-reference-cache-clear)
+     (k-agenda-model-reference-tree)
+     (let ((entry (gethash (expand-file-name "alpha.org" dir)
+                           k-agenda-model--reference-cache)))
+       (should (string-match-p "body text here" (plist-get entry :text)))))))
+
+(ert-deftest k-agenda-test-reference-search-ranks-name-matches-first ()
+  "Files matching on name/title come before files matching only on content,
+and are flagged `:match' so the client can tell the tiers apart."
+  (k-agenda-test--call-with-references-dir
+   '(("zeta.org" . "#+TITLE: Zeta Notes\n\n* Intro\nall about widgets here\n")
+     ("widget.org" . "#+TITLE: Widget Guide\n\n* Setup\nnothing relevant\n"))
+   (lambda (_dir)
+     (k-agenda-model-reference-cache-clear)
+     (let ((results (k-agenda-model-reference-search "widget")))
+       (should (= (length results) 2))
+       ;; widget.org matches by filename/title -> first tier.
+       (should (equal (plist-get (car results) :title) "Widget Guide"))
+       (should (plist-get (car results) :match))
+       ;; zeta.org matches only in a section body -> second tier.
+       (should (equal (plist-get (cadr results) :title) "Zeta Notes"))
+       (should-not (plist-get (cadr results) :match))))))
+
+(ert-deftest k-agenda-test-reference-search-surfaces-matching-sections ()
+  "A body hit deep in the outline comes back in its real position: the
+matching heading is flagged, and its non-matching ancestor is carried
+along unflagged rather than the hit floating up to the file root."
+  (k-agenda-test--call-with-references-dir
+   '(("study.org" . "#+TITLE: Study\n\n* Block 1\n** Tensors\nthe magic word is aardvark\n** Other\nnope\n* Block 2\nnope\n"))
+   (lambda (_dir)
+     (k-agenda-model-reference-cache-clear)
+     (let* ((results (k-agenda-model-reference-search "aardvark"))
+            (root (car results))
+            (block1 (car (plist-get root :children))))
+       (should (= (length results) 1))
+       (should-not (plist-get root :match))     ; file matched only via content
+       (should (= (length (plist-get root :children)) 1)) ; Block 2 pruned away
+       (should (equal (plist-get block1 :title) "Block 1"))
+       (should-not (plist-get block1 :match))   ; ancestor: kept, not a hit
+       (let ((kids (plist-get block1 :children)))
+         (should (= (length kids) 1))           ; "Other" pruned away
+         (should (equal (plist-get (car kids) :title) "Tensors"))
+         (should (plist-get (car kids) :match)))))))
+
+(ert-deftest k-agenda-test-reference-search-matches-heading-titles ()
+  "A heading whose title matches is a hit even when its body doesn't."
+  (k-agenda-test--call-with-references-dir
+   '(("study.org" . "#+TITLE: Study\n\n* Keyframes\nbody says nothing\n* Other\nnope\n"))
+   (lambda (_dir)
+     (k-agenda-model-reference-cache-clear)
+     (let* ((results (k-agenda-model-reference-search "keyframes"))
+            (kids (plist-get (car results) :children)))
+       (should (= (length kids) 1))
+       (should (equal (plist-get (car kids) :title) "Keyframes"))
+       (should (plist-get (car kids) :match))))))
+
+(ert-deftest k-agenda-test-reference-search-is-case-insensitive ()
+  "Query case never matters -- users type prose, not exact casing."
+  (k-agenda-test--call-with-references-dir
+   '(("study.org" . "#+TITLE: Study\n\n* Intro\nThe Cartoon Pipeline\n"))
+   (lambda (_dir)
+     (k-agenda-model-reference-cache-clear)
+     (should (= (length (k-agenda-model-reference-search "cartoon")) 1))
+     (should (= (length (k-agenda-model-reference-search "CARTOON")) 1))
+     (should (= (length (k-agenda-model-reference-search "CaRtOoN")) 1)))))
+
+(ert-deftest k-agenda-test-reference-search-treats-query-literally ()
+  "Regexp metacharacters in a query are literal text, not syntax -- typing
+`c++' or `a.c' must neither error nor match as a pattern."
+  (k-agenda-test--call-with-references-dir
+   '(("study.org" . "#+TITLE: Study\n\n* Intro\nnotes on c++ and the a.c file\n")
+     ("other.org" . "#+TITLE: Other\n\n* Intro\nplain abc prose only\n"))
+   (lambda (_dir)
+     (k-agenda-model-reference-cache-clear)
+     ;; As a regexp, `c++' is invalid ("+" with nothing to repeat) and would
+     ;; error rather than match.
+     (should (= (length (k-agenda-model-reference-search "c++")) 1))
+     ;; The discriminator: as a regexp `a.c' matches "abc" in other.org, so
+     ;; a literal search must return study.org ONLY.
+     (let ((results (k-agenda-model-reference-search "a.c")))
+       (should (= (length results) 1))
+       (should (equal (plist-get (car results) :title) "Study")))
+     ;; Metacharacters that appear in Org's own markup must not error. `*'
+     ;; legitimately matches every file here -- every heading line starts
+     ;; with one, and search scans raw Org source.
+     (should (= (length (k-agenda-model-reference-search "*")) 2)))))
+
+(ert-deftest k-agenda-test-reference-search-blank-query-returns-full-tree ()
+  "Clearing the search box restores the unfiltered list."
+  (k-agenda-test--call-with-references-dir
+   '(("alpha.org" . "#+TITLE: Alpha\n\n* One\n")
+     ("beta.org" . "#+TITLE: Beta\n\n* Two\n"))
+   (lambda (_dir)
+     (k-agenda-model-reference-cache-clear)
+     (should (equal (k-agenda-model-reference-search "") (k-agenda-model-reference-tree)))
+     (should (equal (k-agenda-model-reference-search "   ") (k-agenda-model-reference-tree)))
+     (should (equal (k-agenda-model-reference-search nil) (k-agenda-model-reference-tree))))))
+
+(ert-deftest k-agenda-test-reference-search-no-match-is-empty ()
+  "A query matching nothing narrows the list to nothing."
+  (k-agenda-test--call-with-references-dir
+   '(("alpha.org" . "#+TITLE: Alpha\n\n* One\nsome text\n"))
+   (lambda (_dir)
+     (k-agenda-model-reference-cache-clear)
+     (should (null (k-agenda-model-reference-search "zzznotfoundzzz"))))))
+
+(ert-deftest k-agenda-test-reference-search-finds-preamble-text ()
+  "A hit in a doc's preamble (before any heading) lists the file, with no
+section to expand to."
+  (k-agenda-test--call-with-references-dir
+   '(("alpha.org" . "#+TITLE: Alpha\n\nintro mentions marmoset\n\n* One\nbody\n"))
+   (lambda (_dir)
+     (k-agenda-model-reference-cache-clear)
+     (let ((results (k-agenda-model-reference-search "marmoset")))
+       (should (= (length results) 1))
+       (should-not (plist-get (car results) :match))
+       (should (null (plist-get (car results) :children)))))))
+
+(ert-deftest k-agenda-test-collect-entries-sees-unsaved-buffer-edits ()
+  "An agenda file open with unsaved edits is read from its BUFFER, not disk.
+This is the property that makes parsing from disk safe elsewhere:
+`org-after-todo-state-change-hook' can fire a broadcast while a change is
+still unsaved, and the web view must show it rather than the stale file."
+  (k-agenda-test-with-fixture-files ((file "* TODO Saved task\n"))
+    (let ((buffer (find-file-noselect file)))
+      (with-current-buffer buffer
+        (goto-char (point-max))
+        (insert "* TODO Unsaved task\n"))
+      (let ((titles (mapcar (lambda (e) (plist-get e :title))
+                            (k-agenda-model-collect-entries))))
+        (should (member "Saved task" titles))
+        (should (member "Unsaved task" titles)))
+      ;; The body lookup must resolve the unsaved entry too -- it re-reads
+      ;; independently, and would miss if it disagreed about the source.
+      (let* ((entry (cl-find-if (lambda (e) (equal (plist-get e :title) "Unsaved task"))
+                                (k-agenda-model-collect-entries)))
+             (body (k-agenda-model-body-for-id (plist-get entry :id))))
+        (should (stringp body)))
+      (with-current-buffer buffer (set-buffer-modified-p nil)))))
+
+(ert-deftest k-agenda-test-collect-entries-does-not-open-buffers ()
+  "Building a snapshot leaves no buffers behind. Merely loading the web UI
+must not silently fill the user's buffer list with every agenda file."
+  (k-agenda-test-with-fixture-files ((file "* TODO One\n** TODO Two\n"))
+    (should-not (get-file-buffer file))
+    (should (= (length (k-agenda-model-collect-entries)) 2))
+    (should-not (get-file-buffer file))))
+
+(ert-deftest k-agenda-test-collect-entries-preserves-point-and-narrowing ()
+  "Reading a live agenda buffer must not disturb it: the user's point stays
+put, and a narrowed buffer still yields every entry rather than only the
+visible ones."
+  (k-agenda-test-with-fixture-files ((file "* TODO One\n* TODO Two\n* TODO Three\n"))
+    (let ((buffer (find-file-noselect file)))
+      (with-current-buffer buffer
+        (goto-char (point-min))
+        (narrow-to-region (point-min) 12)
+        (goto-char 5)
+        (should (= (length (k-agenda-model-collect-entries)) 3))
+        (should (= (point) 5))
+        ;; The narrowing itself must survive -- widening is ours to undo.
+        (should (= (point-min) 1))
+        (should (= (point-max) 12))
+        (widen)))))
+
 (provide 'k-agenda-model-test)
 ;;; k-agenda-model-test.el ends here

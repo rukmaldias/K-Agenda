@@ -3,6 +3,7 @@ import type {
   ChangeStateResponse,
   ReferenceBodyMessage,
   ReferenceNode,
+  ReferenceSearchMessage,
   ReferenceTreeMessage,
   SnapshotData,
   SnapshotMessage,
@@ -16,6 +17,7 @@ type IncomingMessage =
   | TaskBodyMessage
   | ReferenceBodyMessage
   | ReferenceTreeMessage
+  | ReferenceSearchMessage
   | ChangeStateResponse;
 
 interface StoreState {
@@ -185,6 +187,55 @@ export function useReferenceTree(): ReferenceNode[] | undefined {
   }, [status]);
 
   return tree;
+}
+
+/** Debounce before a keystroke becomes a search request. Long enough that
+ * typing a word is one round trip rather than six, short enough to feel
+ * immediate. The scan itself costs ~14ms server-side; this is about not
+ * making Emacs do it per character. */
+const SEARCH_DEBOUNCE_MS = 150;
+
+/** Searches reference docs (file name/title and full text) for QUERY,
+ * returning the narrowed tree with matching sections surfaced. A blank
+ * QUERY returns undefined rather than issuing a request -- the caller
+ * falls back to the full `useReferenceTree' list, so clearing the box is
+ * instant and costs no round trip.
+ *
+ * Returns undefined while the first result for a new query is in flight;
+ * callers should keep showing the previous list rather than flashing an
+ * empty one.
+ *
+ * Replies are matched against the query that's current at arrival time,
+ * so an out-of-order or superseded response is dropped instead of
+ * overwriting fresher results. */
+export function useReferenceSearch(query: string): ReferenceNode[] | undefined {
+  const [results, setResults] = useState<ReferenceNode[] | undefined>(undefined);
+  const trimmed = query.trim();
+
+  useEffect(() => {
+    if (trimmed === "") {
+      setResults(undefined);
+      return;
+    }
+    setResults(undefined);
+    const onMessage = (msg: IncomingMessage) => {
+      // The echoed query is the guard: anything not matching what we're
+      // currently waiting for is a stale reply for an earlier keystroke.
+      if (msg.type === "reference-search" && msg.query === trimmed) {
+        setResults(msg.tree);
+      }
+    };
+    const timer = setTimeout(() => {
+      messageListeners.add(onMessage);
+      sendMessage({ type: "reference-search-request", query: trimmed });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      messageListeners.delete(onMessage);
+    };
+  }, [trimmed]);
+
+  return results;
 }
 
 const CHANGE_STATE_TIMEOUT_MS = 8000;

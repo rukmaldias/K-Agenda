@@ -160,10 +160,16 @@ null `todoState' so it's still visible as a typed, state-less item."
 
 (defun k-agenda-protocol--reference-node-payload (node)
   "Recursively convert NODE (a `k-agenda-model-reference-tree' plist, either
-a file-root or a nested heading) to its JSON alist form."
+a file-root or a nested heading) to its JSON alist form.
+
+`match' is `t' only on a search hit (see
+`k-agenda-model-reference-search') -- `:json-false' both for an ancestor
+carried along to position a hit, and for every node of an unfiltered
+tree, where the concept doesn't apply."
   (list (cons 'id (plist-get node :id))
         (cons 'title (plist-get node :title))
         (cons 'level (plist-get node :level))
+        (cons 'match (if (plist-get node :match) t :json-false))
         (cons 'tags (k-agenda-protocol--vec (plist-get node :tags)))
         (cons 'children (k-agenda-protocol--vec
                           (mapcar #'k-agenda-protocol--reference-node-payload
@@ -219,6 +225,21 @@ see `k-agenda-ws--on-message' and `k-agenda-ws--schedule-reference-broadcast'."
         (json-null nil))
     (json-encode (list (cons 'type "reference-tree")
                         (cons 'tree (k-agenda-protocol--reference-tree-payload))))))
+
+(defun k-agenda-protocol-encode-reference-search (query)
+  "Return QUERY's matches (see `k-agenda-model-reference-search') as a
+`reference-search' response, JSON-encoded.
+
+Echoes `query' back because the client fires these per keystroke: replies
+can land out of order, and without the echo a slow reply for \"car\" could
+overwrite the results for \"cartoon\" that the user is already reading."
+  (let ((json-false :json-false)
+        (json-null nil))
+    (json-encode (list (cons 'type "reference-search")
+                        (cons 'query query)
+                        (cons 'tree (k-agenda-protocol--vec
+                                     (mapcar #'k-agenda-protocol--reference-node-payload
+                                             (k-agenda-model-reference-search query))))))))
 
 (defun k-agenda-protocol-encode-reference-body (id file)
   "Look up ID's body within FILE (see `k-agenda-model-reference-body-for-id')
