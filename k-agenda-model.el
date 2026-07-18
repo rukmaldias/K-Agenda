@@ -248,8 +248,18 @@ intervening edit shifted character positions (see
 Returns a plist:
   (:ok t)
   (:ok nil :reason \"stale\" :current-state STRING-OR-NIL)
-  (:ok nil :reason \"not-found\")"
-  (let ((files (k-agenda-model-agenda-files)))
+  (:ok nil :reason \"not-found\")
+
+`org-map-entries' visits every agenda file with `find-file-noselect',
+which normally runs `hack-local-variables' -- and an unsafe file-local
+value (e.g. an `org-columns-default-format' not yet marked safe) makes
+Emacs QUERY interactively. There is no user at that prompt inside the
+websocket handler, so the request hangs until the client times out.
+Binding `enable-local-variables' to `:safe' applies known-safe locals
+and silently skips unsafe ones instead of prompting -- the server never
+blocks, and none of these locals affect a TODO-state write anyway."
+  (let ((files (k-agenda-model-agenda-files))
+        (enable-local-variables :safe))
     (or (catch 'k-agenda-model-change-state-done
           (org-map-entries
            (lambda ()
