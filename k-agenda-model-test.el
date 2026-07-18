@@ -275,6 +275,27 @@ file content from disk, not just in-memory buffer state."
         (insert-file-contents project)
         (should (string-match-p "^\\*\\* NEXT Some task" (buffer-string)))))))
 
+(ert-deftest k-agenda-test-change-state-survives-unrelated-earlier-edit ()
+  "A task with no real `:ID:' property is identified by a hash of its
+outline path + title, not its raw character offset -- so an edit to an
+*earlier*, unrelated heading between snapshot and drop (e.g. the user
+ticking off a different task in Emacs, or a stray autosave) must not
+turn a later card's move into a spurious \"not-found\" error."
+  (k-agenda-test-with-fixture-files
+      ((project "* Project\n\n** TODO Earlier task\n\n** NEXT Later task\n"))
+    (let* ((entries (k-agenda-model-collect-entries))
+           (task (cl-find "Later task" entries
+                           :key (lambda (e) (plist-get e :title)) :test #'equal)))
+      ;; Simulate an unrelated edit landing earlier in the file (e.g. from
+      ;; Emacs, outside of k-agenda) after the snapshot was already sent.
+      (with-temp-file project
+        (insert "* Project\n\n** TODO Earlier task\nSome new note shifting everything below.\n\n** NEXT Later task\n"))
+      (let ((result (k-agenda-model-change-state (plist-get task :id) "NEXT" "DONE")))
+        (should (plist-get result :ok))
+        (with-temp-buffer
+          (insert-file-contents project)
+          (should (string-match-p "^\\*\\* DONE Later task" (buffer-string))))))))
+
 (ert-deftest k-agenda-test-change-state-refuses-when-state-is-stale ()
   "If the entry's CURRENT state doesn't match the caller's believed
 fromState (someone else changed it since the snapshot was taken, or a
