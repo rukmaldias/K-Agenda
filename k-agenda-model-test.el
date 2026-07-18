@@ -315,6 +315,32 @@ applied, and nothing is written to disk."
         (insert-file-contents project)
         (should (string-match-p "^\\*\\* WAITING Some task" (buffer-string)))))))
 
+(ert-deftest k-agenda-test-change-state-id-matches-across-disk-and-buffer-reads ()
+  "A snapshot id, minted with no buffer open (`k-agenda-model-collect-entries'
+reads straight off disk in that case), must still resolve once the file has
+since been visited as a real buffer -- which `k-agenda-model-change-state'
+always goes through, via `org-map-entries' with a file-list scope. If the two
+read paths ever hashed the same heading differently, every drag on an
+unopened file would come back \"not-found\" instead of the intended state
+change.
+
+Probes with a deliberately wrong fromState so the assertion only needs the id
+to be FOUND (a \"stale\" refusal), not for the actual current state to be
+correctly predicted -- and, being a refusal, guarantees no write happens, so
+this stays a read-only check of id agreement."
+  (k-agenda-test-with-fixture-files
+      ((project "* Project\n\n** TODO Some task\n"))
+    (should-not (get-file-buffer project))
+    (let* ((entries (k-agenda-model-collect-entries))
+           (task (cl-find "Some task" entries
+                           :key (lambda (e) (plist-get e :title)) :test #'equal)))
+      (should-not (get-file-buffer project))
+      (find-file-noselect project)
+      (let ((result (k-agenda-model-change-state (plist-get task :id) "bogus-from-state" "NEXT")))
+        (should-not (plist-get result :ok))
+        (should (equal (plist-get result :reason) "stale"))
+        (should (equal (plist-get result :current-state) "TODO"))))))
+
 (defun k-agenda-test--call-with-references-dir (file-specs thunk)
   "Like `k-agenda-test--call-with-project-dir' but binds
 `k-agenda-references-dir' to the temp directory instead of
