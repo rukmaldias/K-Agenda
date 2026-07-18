@@ -103,15 +103,25 @@ sub-level headings and no title falls back to its capitalized basename."
 
 (defun k-agenda-model--entry-id ()
   "Stable-ish id for the entry at point: its real `:ID:' property if the
-user has one, else a hash of file+point. The hash form is NOT stable
-across edits that shift character positions earlier in the buffer --
-acceptable for a React list key and for the short-lived
-list-then-click-for-detail flow (`k-agenda-model-body-for-id'
+user has one, else a hash of file+outline-path+heading-text. Keyed on
+outline position rather than raw character offset so it survives an
+unrelated edit anywhere else in the file -- a point-based hash broke as
+soon as anything earlier in the buffer shifted, which made
+`k-agenda-model-change-state' fail with a spurious \"couldn't be found\"
+error on any heading without a real `:ID:', the moment anything else in
+the file changed between snapshot and drop.
+
+Still NOT stable across a change to this heading's own title or its
+position in the outline -- acceptable for a React list key and for the
+short-lived list-then-click-for-detail flow (`k-agenda-model-body-for-id'
 re-resolves this fresh from the current buffer state on every request,
 so a stale id from an old snapshot just fails to match rather than
 resolving to the wrong heading)."
   (or (org-entry-get (point) "ID")
-      (secure-hash 'sha1 (format "%s::%d" (buffer-file-name) (point)))))
+      (secure-hash 'sha1 (format "%s::%s::%s"
+                                  (buffer-file-name)
+                                  (mapconcat #'identity (org-get-outline-path) "\x1f")
+                                  (substring-no-properties (org-get-heading t t t t))))))
 
 (defun k-agenda-model--entry-plist ()
   "Build the data plist for the Org entry at point.
