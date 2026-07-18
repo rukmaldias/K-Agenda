@@ -341,6 +341,35 @@ this stays a read-only check of id agreement."
         (should (equal (plist-get result :reason) "stale"))
         (should (equal (plist-get result :current-state) "TODO"))))))
 
+(ert-deftest k-agenda-test-entry-id-folds-drive-letter-case-on-case-insensitive-fs ()
+  "On a case-insensitive file system, the same heading in the same file must
+hash to the same id regardless of which case its drive letter happens to be
+in. `find-file-noselect' downcases a Windows drive letter when it visits a
+file, but a snapshot minted with `buffer-file-name' let-bound straight from
+`org-agenda-files' (see `k-agenda-model--with-file-parsed') keeps whatever
+case the user wrote there -- `C:/Users/...' is entirely normal in an Org
+config. Without folding, that mismatch hashed every heading in the file to
+two different ids depending on which path minted it, so
+`k-agenda-model-change-state' -- which always resolves its files through a
+real visited buffer, and so always sees the downcased form -- could never
+find the id a snapshot handed back: a permanent, file-wide \"couldn't be
+found\" on real Windows configs, reproduced against a real user file before
+this fix."
+  (cl-letf (((symbol-function 'file-name-case-insensitive-p) (lambda (_) t)))
+    (let ((org-inhibit-startup t)
+          id-lower id-upper)
+      (with-temp-buffer
+        (let ((buffer-file-name "c:/Users/HP/Documents/Org/organizer/projects/x.org"))
+          (insert "* TODO Some task\n")
+          (delay-mode-hooks (org-mode))
+          (org-map-entries (lambda () (setq id-lower (k-agenda-model--entry-id))))))
+      (with-temp-buffer
+        (let ((buffer-file-name "C:/Users/HP/Documents/Org/organizer/projects/x.org"))
+          (insert "* TODO Some task\n")
+          (delay-mode-hooks (org-mode))
+          (org-map-entries (lambda () (setq id-upper (k-agenda-model--entry-id))))))
+      (should (equal id-lower id-upper)))))
+
 (defun k-agenda-test--call-with-references-dir (file-specs thunk)
   "Like `k-agenda-test--call-with-project-dir' but binds
 `k-agenda-references-dir' to the temp directory instead of

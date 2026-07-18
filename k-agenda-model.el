@@ -111,6 +111,17 @@ soon as anything earlier in the buffer shifted, which made
 error on any heading without a real `:ID:', the moment anything else in
 the file changed between snapshot and drop.
 
+The file component is case-folded on a case-insensitive file system (see
+`k-agenda-model--file-name-equal-p') -- `buffer-file-name' disagrees on
+drive-letter case between a buffer opened via `find-file-noselect' (which
+downcases it on w32) and one read straight off disk with `buffer-file-name'
+let-bound to whatever case `org-agenda-files' happened to be written in
+(see `k-agenda-model--with-file-parsed'). Without folding, a snapshot
+minted before the file's buffer existed would hash every heading in that
+file to an id `k-agenda-model-change-state' -- which always resolves its
+files through a real visited buffer -- could never match, surfacing as a
+permanent \"couldn't be found\" on that file's cards.
+
 Still NOT stable across a change to this heading's own title or its
 position in the outline -- acceptable for a React list key and for the
 short-lived list-then-click-for-detail flow (`k-agenda-model-body-for-id'
@@ -118,10 +129,11 @@ re-resolves this fresh from the current buffer state on every request,
 so a stale id from an old snapshot just fails to match rather than
 resolving to the wrong heading)."
   (or (org-entry-get (point) "ID")
-      (secure-hash 'sha1 (format "%s::%s::%s"
-                                  (buffer-file-name)
-                                  (mapconcat #'identity (org-get-outline-path) "\x1f")
-                                  (substring-no-properties (org-get-heading t t t t))))))
+      (let ((file (buffer-file-name)))
+        (secure-hash 'sha1 (format "%s::%s::%s"
+                                    (if (file-name-case-insensitive-p file) (downcase file) file)
+                                    (mapconcat #'identity (org-get-outline-path) "\x1f")
+                                    (substring-no-properties (org-get-heading t t t t)))))))
 
 (defun k-agenda-model--entry-plist ()
   "Build the data plist for the Org entry at point.
